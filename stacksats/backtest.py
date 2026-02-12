@@ -14,7 +14,7 @@ import seaborn as sns
 from .api import run_backtest
 from .loader import load_strategy
 from .model_development import compute_window_weights, precompute_features
-from .prelude import backtest_dynamic_dca, check_strategy_submission_ready, load_data, parse_window_dates
+from .prelude import check_strategy_submission_ready, load_data, parse_window_dates
 from .strategies.mvrv import MVRVStrategy
 
 # Set seaborn style for all plots
