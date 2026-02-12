@@ -10,6 +10,7 @@ Weight computation strategy:
 - Each day the modal app runs, future uniform weights are recalculated
 """
 
+import argparse
 import os
 
 import pandas as pd
@@ -21,6 +22,7 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
     execute_values = None
 
 from .btc_price_fetcher import fetch_btc_price_robust
+from .loader import load_strategy
 from .model_development import compute_window_weights, precompute_features
 from .prelude import (
     generate_date_ranges,
@@ -55,7 +57,13 @@ def _require_deploy_dependency(name: str, imported_obj):
 
 
 def process_start_date_batch(
-    start_date, end_dates, features_df, btc_df, current_date, btc_price_col
+    start_date,
+    end_dates,
+    features_df,
+    btc_df,
+    current_date,
+    btc_price_col,
+    strategy=None,
 ):
     """Process all date ranges sharing the same start_date.
 
@@ -79,10 +87,16 @@ def process_start_date_batch(
         full_range = pd.date_range(start=start_date, end=end_date, freq="D")
         n_total = len(full_range)
 
-        # Compute weights using shared function from model_development.py
-        weights = compute_window_weights(
-            features_df, start_date, end_date, current_date
-        )
+        # Compute weights using either provided strategy or default model function.
+        if strategy is None:
+            weights = compute_window_weights(features_df, start_date, end_date, current_date)
+        else:
+            weights = strategy.compute_weights(
+                features_df=features_df,
+                start_date=start_date,
+                end_date=end_date,
+                current_date=current_date,
+            )
 
         # Get prices: past prices are known, future prices are NaN
         range_prices = btc_df[btc_price_col].reindex(full_range).values
@@ -606,6 +620,17 @@ def update_today_weights(conn, df, today_str):
 
 def main():
     """Main function for local execution."""
+    parser = argparse.ArgumentParser(description="Export StackSats weights to database.")
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default=None,
+        help="Custom strategy spec in 'module_or_path:ClassName' format",
+    )
+    args = parser.parse_args()
+
+    strategy = load_strategy(args.strategy) if args.strategy else None
+
     print("Loading data...")
     btc_df = load_data()
 
@@ -656,7 +681,13 @@ def main():
             )
 
         batch_result = process_start_date_batch(
-            start_date, end_dates, features_df, btc_df, current_date, btc_price_col
+            start_date,
+            end_dates,
+            features_df,
+            btc_df,
+            current_date,
+            btc_price_col,
+            strategy=strategy,
         )
         all_results.append(batch_result)
 

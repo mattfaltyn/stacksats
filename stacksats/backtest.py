@@ -1,3 +1,4 @@
+import argparse
 import json
 import logging
 import os
@@ -10,13 +11,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from .api import run_backtest
+from .loader import load_strategy
 from .model_development import compute_window_weights, precompute_features
-from .prelude import (
-    backtest_dynamic_dca,
-    check_strategy_submission_ready,
-    load_data,
-    parse_window_dates,
-)
+from .prelude import backtest_dynamic_dca, check_strategy_submission_ready, load_data, parse_window_dates
+from .strategies.mvrv import MVRVStrategy
 
 # Set seaborn style for all plots
 sns.set_style("whitegrid")
@@ -373,89 +372,56 @@ def export_metrics_json(
     logging.info(f"✓ Saved: {output_path}")
 
 
-def main():
+def main() -> None:
     global _FEATURES_DF
 
+    parser = argparse.ArgumentParser(description="Run StackSats rolling-window backtest.")
+    parser.add_argument("--start-date", type=str, default=None, help="YYYY-MM-DD")
+    parser.add_argument("--end-date", type=str, default=None, help="YYYY-MM-DD")
+    parser.add_argument("--output-dir", type=str, default="output", help="Output directory")
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default=None,
+        help="Custom strategy spec in 'module_or_path:ClassName' format",
+    )
+    parser.add_argument(
+        "--strategy-label",
+        type=str,
+        default=None,
+        help="Optional strategy label for reports",
+    )
+    args = parser.parse_args()
+
     logging.info("Starting Bitcoin DCA Strategy Analysis")
-    btc_df = load_data()
 
-    logging.info("Precomputing features...")
-    _FEATURES_DF = precompute_features(btc_df)
+    if args.strategy:
+        strategy = load_strategy(args.strategy)
+        strategy_label = args.strategy_label or args.strategy
+        btc_df = None
+    else:
+        strategy = MVRVStrategy()
+        strategy_label = args.strategy_label or "Dynamic DCA"
+        btc_df = load_data()
 
-    logging.info("Running SPD backtest...")
-    df_spd, exp_decay_percentile = backtest_dynamic_dca(
-        btc_df,
-        compute_weights_modal,
-        features_df=_FEATURES_DF,
-        strategy_label="Dynamic DCA",
+        # Keep the existing submission-readiness check for the built-in strategy.
+        logging.info("Precomputing features for submission checks...")
+        _FEATURES_DF = precompute_features(btc_df)
+        logging.info("Running strategy submission checks...")
+        check_strategy_submission_ready(btc_df, compute_weights_modal)
+
+    result = run_backtest(
+        strategy,
+        btc_df=btc_df,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        strategy_label=strategy_label,
     )
 
-    logging.info("Running strategy validation...")
-    check_strategy_submission_ready(btc_df, compute_weights_modal)
-
-    # Calculate metrics
-    win_rate = (
-        df_spd["dynamic_percentile"] > df_spd["uniform_percentile"]
-    ).mean() * 100
-    score = 0.5 * win_rate + 0.5 * exp_decay_percentile
-
-    excess_percentile = df_spd["dynamic_percentile"] - df_spd["uniform_percentile"]
-    mean_excess = excess_percentile.mean()
-    median_excess = excess_percentile.median()
-
-    uniform_pct_safe = df_spd["uniform_percentile"].replace(0, 0.01)
-    relative_improvements = excess_percentile / uniform_pct_safe * 100
-    relative_improvement_pct_mean = relative_improvements.mean()
-    relative_improvement_pct_median = relative_improvements.median()
-
-    wins = (df_spd["dynamic_percentile"] > df_spd["uniform_percentile"]).sum()
-    losses = len(df_spd) - wins
-
-    metrics = {
-        "score": score,
-        "win_rate": win_rate,
-        "exp_decay_percentile": exp_decay_percentile,
-        "mean_excess": mean_excess,
-        "median_excess": median_excess,
-        "relative_improvement_pct_mean": relative_improvement_pct_mean,
-        "relative_improvement_pct_median": relative_improvement_pct_median,
-        "mean_ratio": (
-            df_spd["dynamic_percentile"] / df_spd["uniform_percentile"]
-        ).mean(),
-        "median_ratio": (
-            df_spd["dynamic_percentile"] / df_spd["uniform_percentile"]
-        ).median(),
-        "total_windows": len(df_spd),
-        "wins": int(wins),
-        "losses": int(losses),
-    }
-
-    logging.info(f"Final Model Score: {score:.2f}%")
-    logging.info(
-        f"  Excess percentile: mean={mean_excess:.2f}%, median={median_excess:.2f}%"
-    )
-    logging.info(
-        f"  Relative improvement: mean={relative_improvement_pct_mean:.2f}%, "
-        f"median={relative_improvement_pct_median:.2f}%"
-    )
-    logging.info(
-        f"  Ratio (dynamic/uniform): mean={metrics['mean_ratio']:.2f}, "
-        f"median={metrics['median_ratio']:.2f}"
-    )
-
-    # Generate visualizations and export metrics
-    output_dir = "output"
-    os.makedirs(output_dir, exist_ok=True)
-
-    logging.info("Generating visualizations...")
-    create_performance_comparison_chart(df_spd, output_dir)
-    create_excess_percentile_distribution(df_spd, output_dir)
-    create_win_loss_comparison(df_spd, output_dir)
-    create_cumulative_performance(df_spd, output_dir)
-    create_performance_metrics_summary(df_spd, metrics, output_dir)
-    export_metrics_json(df_spd, metrics, output_dir)
-
-    logging.info(f"All outputs saved to '{output_dir}/' directory")
+    print(result.summary())
+    result.plot(output_dir=args.output_dir)
+    result.to_json(os.path.join(args.output_dir, "backtest_result.json"))
+    logging.info(f"All outputs saved to '{args.output_dir}/' directory")
 
 
 if __name__ == "__main__":

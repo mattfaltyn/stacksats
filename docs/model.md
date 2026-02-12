@@ -28,10 +28,9 @@ The model computes daily investment weights that determine how much of your DCA 
 6. **Volatility Dampening**: Reduce exposure during high uncertainty periods
 
 **Key Properties:**
-- Weights sum to exactly 1.0 for each date range (within tolerance of 1e-6)
-- All weights are ≥ MIN_W (1e-6) to prevent zero allocations
+- Weights sum to exactly 1.0 for each date range (within tolerance)
 - Past weights are **locked** once computed and never change
-- Future weights are **uniform** (remaining budget distributed evenly)
+- Future weights are distributed from the remaining budget
 - Weights are deterministic given the same inputs
 
 ## Model Architecture
@@ -294,7 +293,7 @@ def compute_dynamic_multiplier(...):
     combined *= volatility_dampening   # [0.8, 1.0] only if volatility > 0.8
     
     # 6. Scale and exponentiate
-    adjustment = clip(combined * DYNAMIC_STRENGTH, -4, 4)
+    adjustment = clip(combined * DYNAMIC_STRENGTH, -5, 100)
     return exp(adjustment)
 ```
 
@@ -365,7 +364,7 @@ def compute_window_weights(features_df, start_date, end_date, current_date) -> p
 | MVRV_CYCLE_WINDOW | 1461 | 4-year window for percentile (halving cycle) |
 | MVRV_ACCEL_WINDOW | 14 | Window for acceleration calculation |
 | MVRV_VOLATILITY_WINDOW | 90 | Window for volatility calculation |
-| DYNAMIC_STRENGTH | 3.0 | Weight adjustment multiplier |
+| DYNAMIC_STRENGTH | 5.0 | Weight adjustment multiplier |
 | MVRV_VOLATILITY_DAMPENING | 0.2 | Max dampening in extreme volatility |
 
 ### MVRV Zone Thresholds

@@ -325,15 +325,28 @@ def validate_strategy(
 
 
 def validate_strategy_cli() -> None:
-    """CLI entrypoint for validating the built-in MVRV strategy."""
+    """CLI entrypoint for validating a StackSats strategy."""
     parser = argparse.ArgumentParser(description="Validate a StackSats strategy.")
     parser.add_argument("--start-date", type=str, default=None, help="YYYY-MM-DD")
     parser.add_argument("--end-date", type=str, default=None, help="YYYY-MM-DD")
     parser.add_argument("--min-win-rate", type=float, default=50.0, help="Minimum win rate percent")
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default=None,
+        help="Custom strategy spec in 'module_or_path:ClassName' format",
+    )
     args = parser.parse_args()
 
+    if args.strategy:
+        from .loader import load_strategy
+
+        strategy = load_strategy(args.strategy)
+    else:
+        strategy = MVRVStrategy()
+
     result = validate_strategy(
-        MVRVStrategy(),
+        strategy,
         start_date=args.start_date,
         end_date=args.end_date,
         min_win_rate=args.min_win_rate,

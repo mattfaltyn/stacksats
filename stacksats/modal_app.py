@@ -3,6 +3,9 @@
 Deploys web endpoints and scheduled jobs on Modal.
 """
 
+import os
+from pathlib import Path
+
 try:
     import modal
 except ImportError:  # pragma: no cover - used in local/test environments
@@ -62,6 +65,9 @@ except ImportError:  # pragma: no cover - used in local/test environments
         def add_local_dir(self, *_args, **_kwargs):
             return self
 
+        def add_local_file(self, *_args, **_kwargs):
+            return self
+
     class _LocalCron:
         def __init__(self, _expr):
             self.expr = _expr
@@ -82,6 +88,12 @@ try:
 except ImportError:
     # Fallback if python-dotenv is not available
     pass
+
+
+# Optional strategy override loaded from environment.
+# Supports either module path (`pkg.module:Class`) or file path (`my_strategy.py:Class`).
+RAW_STRATEGY_SPEC = os.getenv("STACKSATS_STRATEGY")
+MODAL_STRATEGY_SPEC = RAW_STRATEGY_SPEC
 
 # Create Modal app and image
 app = modal.App("export-weights")
@@ -105,13 +117,22 @@ image = (
     .add_local_dir("stacksats", "/root/stacksats")
 )
 
+if RAW_STRATEGY_SPEC and ":" in RAW_STRATEGY_SPEC:
+    strategy_module_or_path, strategy_class_name = RAW_STRATEGY_SPEC.rsplit(":", 1)
+    if strategy_module_or_path.endswith(".py"):
+        local_strategy_path = Path(strategy_module_or_path).expanduser().resolve()
+        if local_strategy_path.exists():
+            container_strategy_path = f"/root/{local_strategy_path.name}"
+            image = image.add_local_file(str(local_strategy_path), container_strategy_path)
+            MODAL_STRATEGY_SPEC = f"{container_strategy_path}:{strategy_class_name}"
+
 
 @app.function(image=image)
 def process_start_date_batch_modal(args_tuple):
     """Process a batch of date ranges sharing the same start date on Modal worker.
 
     Args:
-        args_tuple: Tuple of (start_date_str, end_date_strs_list, current_date_str, btc_price_col, features_df_pickle, btc_df_pickle)
+        args_tuple: Tuple of (start_date_str, end_date_strs_list, current_date_str, btc_price_col, features_df_pickle, btc_df_pickle, strategy_spec)
     """
     import pickle
     import sys
@@ -121,16 +142,33 @@ def process_start_date_batch_modal(args_tuple):
     import pandas as pd
 
     from .export_weights import process_start_date_batch
+    from .loader import load_strategy
 
-    # Unpack arguments
-    (
-        start_date_str,
-        end_date_strs,
-        current_date_str,
-        btc_price_col,
-        features_df_pickle,
-        btc_df_pickle,
-    ) = args_tuple
+    # Unpack arguments (supports legacy 6-item tuple without strategy_spec)
+    if len(args_tuple) == 7:
+        (
+            start_date_str,
+            end_date_strs,
+            current_date_str,
+            btc_price_col,
+            features_df_pickle,
+            btc_df_pickle,
+            strategy_spec,
+        ) = args_tuple
+    elif len(args_tuple) == 6:
+        (
+            start_date_str,
+            end_date_strs,
+            current_date_str,
+            btc_price_col,
+            features_df_pickle,
+            btc_df_pickle,
+        ) = args_tuple
+        strategy_spec = None
+    else:
+        raise ValueError(
+            f"process_start_date_batch_modal expected 6 or 7 args, got {len(args_tuple)}"
+        )
 
     # Reconstruct DataFrames from pickle
     features_df = pickle.loads(features_df_pickle)
@@ -140,8 +178,15 @@ def process_start_date_batch_modal(args_tuple):
     end_dates = [pd.to_datetime(d) for d in end_date_strs]
     current_date = pd.to_datetime(current_date_str)
 
+    strategy = load_strategy(strategy_spec) if strategy_spec else None
     return process_start_date_batch(
-        start_date, end_dates, features_df, btc_df, current_date, btc_price_col
+        start_date,
+        end_dates,
+        features_df,
+        btc_df,
+        current_date,
+        btc_price_col,
+        strategy=strategy,
     )
 
 
@@ -180,6 +225,8 @@ def run_export(
     range_end = range_end or RANGE_END
     min_range_length_days = min_range_length_days or MIN_RANGE_LENGTH_DAYS
     btc_price_col = btc_price_col or BTC_PRICE_COL
+
+    strategy_spec = MODAL_STRATEGY_SPEC
 
     print("Loading data...")
     btc_df = load_data()
@@ -225,6 +272,7 @@ def run_export(
                 btc_price_col,
                 features_df_pickle,
                 btc_df_pickle,
+                strategy_spec,
             )
         )
 

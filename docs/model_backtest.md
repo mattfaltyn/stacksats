@@ -245,52 +245,70 @@ assert win_rate >= 0.5
 Run the backtest from the command line:
 
 ```bash
-cd /path/to/bitcoin_modal
+cd /path/to/stacksats
 source venv/bin/activate
-python -m stacksats.backtest
+stacksats-backtest
 ```
 
-The script will:
-1. Load BTC data with today's live price
-2. Precompute all model features
-3. Run SPD backtest across all rolling windows
-4. Validate weights and check for forward-leakage
-5. Generate visualizations and export metrics
+Run a custom strategy from a standalone file:
 
-## Key Functions
-
-### `compute_weights_modal(df_window)`
-
-Wrapper that connects the backtest to the model's weight computation:
-
-```python
-def compute_weights_modal(df_window: pd.DataFrame) -> pd.Series:
-    """Compute weights using compute_window_weights for validation."""
-    start_date = df_window.index.min()
-    end_date = df_window.index.max()
-    current_date = end_date  # For backtesting, all dates are "past"
-    return compute_window_weights(_FEATURES_DF, start_date, end_date, current_date)
+```bash
+stacksats-backtest --strategy examples/model_example.py:ExampleMVRVStrategy
 ```
 
-### `backtest_dynamic_dca(dataframe, strategy_function)`
+Add optional controls:
 
-Main backtest driver that computes SPD statistics:
+```bash
+stacksats-backtest \
+  --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --start-date 2020-01-01 \
+  --end-date 2025-01-01 \
+  --output-dir output \
+  --strategy-label model-example
+```
+
+## Public API Functions
+
+### `run_backtest(strategy, ...)`
+
+Recommended API for rolling-window SPD backtests:
 
 ```python
-df_spd, exp_decay_percentile = backtest_dynamic_dca(
-    btc_df,
-    compute_weights_modal,
-    features_df=_FEATURES_DF,
-    strategy_label="Dynamic DCA",
+from stacksats import run_backtest
+from examples.model_example import ExampleMVRVStrategy
+
+result = run_backtest(
+    ExampleMVRVStrategy(),
+    start_date="2020-01-01",
+    end_date="2025-01-01",
+    strategy_label="model-example",
 )
+print(result.summary())
+result.plot(output_dir="output")
+result.to_json("output/backtest_result.json")
 ```
 
-### `check_strategy_submission_ready(dataframe, strategy_function)`
+### `validate_strategy(strategy, ...)`
 
-Comprehensive validation for production readiness:
+Recommended API for submission-readiness checks:
 - Forward-leakage test (no future data used)
 - Weight validation (non-negative, sum to 1.0)
-- Performance check (≥50% win rate vs uniform DCA)
+- Performance check (configurable minimum win rate, default 50%)
+
+```python
+from stacksats import validate_strategy
+from examples.model_example import ExampleMVRVStrategy
+
+validation = validate_strategy(
+    ExampleMVRVStrategy(),
+    start_date="2020-01-01",
+    end_date="2025-01-01",
+    min_win_rate=50.0,
+)
+print(validation.summary())
+for message in validation.messages:
+    print("-", message)
+```
 
 ## Performance Characteristics
 
