@@ -11,15 +11,14 @@ This guide covers both:
 - Package version is generated automatically from git tags via `setuptools-scm`.
 - Use annotated git tags in the form `vX.Y.Z`.
 - Tag and package version must match exactly (for example, tag `v0.1.1` produces package version `0.1.1`).
-- Never reuse a version number after it has been uploaded to TestPyPI or PyPI.
+- Never reuse a version number after it has been uploaded to PyPI.
 
 ## One-Time Setup
 
 ### Accounts and project names
 
-1. Create/verify accounts on both:
+1. Create/verify account on:
    - PyPI: `https://pypi.org/`
-   - TestPyPI: `https://test.pypi.org/`
 2. Ensure package name `stacksats` is available/owned by this project.
 
 ### Local tooling
@@ -33,13 +32,13 @@ python -m pip install --upgrade build twine
 
 ### Local token handling (manual fallback)
 
-For manual uploads, use API tokens locally only. Do not commit them.
+For manual uploads, use PyPI API tokens locally only. Do not commit them.
 
 Example with environment variables:
 
 ```bash
 export TWINE_USERNAME=__token__
-export TWINE_PASSWORD="<pypi-or-testpypi-token>"
+export TWINE_PASSWORD="<pypi-token>"
 ```
 
 If your local workflow uses `PYPI_API_KEY` in `.env`, map it at runtime:
@@ -78,26 +77,7 @@ python -m build
 python -m twine check dist/*
 ```
 
-### 4) Publish to TestPyPI
-
-```bash
-export TWINE_USERNAME=__token__
-export TWINE_PASSWORD="<testpypi-token>"
-python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
-```
-
-### 5) Smoke test from TestPyPI
-
-```bash
-python -m venv /tmp/stacksats-testpypi
-source /tmp/stacksats-testpypi/bin/activate
-python -m pip install --upgrade pip
-pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple stacksats
-stacksats-backtest --help
-stacksats-validate --help
-```
-
-### 6) Publish to PyPI
+### 4) Publish to PyPI
 
 ```bash
 export TWINE_USERNAME=__token__
@@ -105,7 +85,7 @@ export TWINE_PASSWORD="<pypi-token>"
 python -m twine upload dist/*
 ```
 
-### 7) Tag release
+### 5) Tag release
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
@@ -114,7 +94,7 @@ git push origin vX.Y.Z
 
 The tag is the source of truth for the version. No manual version bump is required.
 
-### 8) Post-release verification
+### 6) Post-release verification
 
 - Verify package page on PyPI.
 - Install from PyPI in a fresh virtual environment.
@@ -132,17 +112,7 @@ Trusted Publishing removes the need for stored PyPI secrets in GitHub.
 ### Workflow files used by this repository
 
 - `.github/workflows/package-check.yml`
-- `.github/workflows/publish-testpypi.yml`
 - `.github/workflows/publish-pypi.yml`
-
-### Configure Trusted Publisher on TestPyPI
-
-In TestPyPI project settings, add a Trusted Publisher with:
-
-- Owner: `hypertrial`
-- Repository: `stacksats`
-- Workflow filename: `publish-testpypi.yml`
-- Environment (recommended): `testpypi`
 
 ### Configure Trusted Publisher on PyPI
 
@@ -155,13 +125,11 @@ In PyPI project settings, add a Trusted Publisher with:
 
 ### Recommended GitHub environment protections
 
-- `testpypi`: optional reviewers.
 - `pypi`: required reviewer(s), protected branch/tag rules.
 
 ## Automated Release Flow
 
 - Pull requests run packaging checks (`package-check.yml`).
-- Pushes to `main` publish to TestPyPI (`publish-testpypi.yml`).
 - Pushes of tags matching `v*` publish to PyPI (`publish-pypi.yml`).
 - PyPI publish job validates tag/version consistency before upload.
 
@@ -170,16 +138,13 @@ In PyPI project settings, add a Trusted Publisher with:
 Use this sequence after workflows are merged:
 
 1. Open a PR with a version bump and verify `package-check.yml` passes.
-2. Merge PR to `main` and verify `publish-testpypi.yml` succeeds.
-3. Install from TestPyPI and run command smoke tests.
-4. Create and push annotated tag `vX.Y.Z`.
-5. Verify `publish-pypi.yml` succeeds.
-6. Install from PyPI in a fresh virtual environment and run command smoke tests.
+2. Create and push annotated tag `vX.Y.Z`.
+3. Verify `publish-pypi.yml` succeeds.
+4. Install from PyPI in a fresh virtual environment and run command smoke tests.
 
 Expected results:
 
-- No PyPI/TestPyPI API tokens are configured in GitHub repository secrets.
-- TestPyPI publishes only from `main`.
+- No PyPI API tokens are configured in GitHub repository secrets.
 - PyPI publishes only from `v*` tags.
 - Tag/version mismatch fails before publish.
 
