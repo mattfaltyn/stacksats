@@ -53,7 +53,10 @@ export TWINE_PASSWORD="${PYPI_API_KEY}"
 
 ### 1) Prepare release branch/PR
 
-1. Update release notes/changelog if maintained.
+1. Update `CHANGELOG.md` (required):
+   - Add user-visible changes under `## [Unreleased]`.
+   - Before tagging, move unreleased entries into the new `vX.Y.Z` section with the release date.
+   - Start a fresh `## [Unreleased]` section for follow-up work.
 2. Ensure CI/tests are green.
 3. Merge to `main`.
 
@@ -185,3 +188,7 @@ Expected results:
 - Do not store PyPI tokens in GitHub Secrets when using OIDC Trusted Publishing.
 - Keep manual twine upload steps documented for emergency fallback only.
 - If a release fails after version/tag creation, bump to the next version and retry; do not overwrite versions.
+- Keep contributor and policy docs current:
+  - `CONTRIBUTING.md`
+  - `SECURITY.md`
+  - `CODE_OF_CONDUCT.md`
