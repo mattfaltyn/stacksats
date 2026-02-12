@@ -34,7 +34,7 @@ log "Running lint"
 python -m ruff check .
 
 log "Running tests"
-python -m pytest tests/ -v
+python -m pytest tests/ -v -n auto
 
 log "Cleaning build artifacts"
 rm -rf dist/ build/ .eggs/ ./*.egg-info
