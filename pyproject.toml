@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stacksats"
+version = "0.1.0"
+description = "Bitcoin DCA model development, backtesting, and Modal deployment toolkit"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "StackSats Contributors" }]
+keywords = ["bitcoin", "dca", "backtesting", "quant", "crypto"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+  "pandas>=2.0.0",
+  "numpy>=1.24.0",
+  "scipy>=1.11.0",
+  "requests>=2.31.0",
+  "matplotlib>=3.7.0",
+  "seaborn>=0.12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/stacksats/stacksats"
+Repository = "https://github.com/stacksats/stacksats"
+Documentation = "https://github.com/stacksats/stacksats/tree/main/docs"
+
+[project.optional-dependencies]
+deploy = [
+  "modal>=0.52.0",
+  "psycopg2-binary>=2.9.0",
+  "fastapi>=0.104.0",
+  "python-dotenv>=1.0.0",
+  "tenacity>=8.2.0",
+  "pyarrow>=13.0.0",
+]
+dev = [
+  "pytest>=7.0.0",
+  "pytest-bdd>=7.0.0",
+  "pytest-cov>=4.0.0",
+  "pytest-mock>=3.10.0",
+  "pytest-benchmark>=4.0.0",
+  "pytest-xdist>=3.0.0",
+  "responses>=0.23.0",
+  "freezegun>=1.2.0",
+  "hypothesis>=6.0.0",
+  "ruff>=0.1.0",
+  "vulture",
+]
+
+[project.scripts]
+stacksats-backtest = "stacksats.backtest:main"
+stacksats-export = "stacksats.export_weights:main"
+stacksats-plot-mvrv = "stacksats.plot_mvrv:main"
+stacksats-plot-weights = "stacksats.plot_weights:main"
+stacksats-validate = "stacksats.api:validate_strategy_cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["stacksats", "stacksats.*"]
+
+[tool.setuptools.package-data]
+stacksats = ["py.typed"]
