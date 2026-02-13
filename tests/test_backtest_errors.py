@@ -169,7 +169,7 @@ class TestBoundaryConditions:
         window_feat = sample_features_df.loc[start_date:end_date]
 
         if len(window_feat) > 0:
-            with pytest.raises(ValueError, match="365 or 366 allocation days"):
+            with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
                 compute_weights_modal(window_feat)
 
     def test_date_range_at_data_boundaries(self, sample_btc_df, sample_features_df):

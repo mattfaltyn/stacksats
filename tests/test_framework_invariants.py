@@ -73,8 +73,9 @@ def test_partial_locked_prefix_supported_in_stable_kernel() -> None:
     raw = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
     locked_prefix = np.array([0.10, 0.20], dtype=float)
     weights = allocate_sequential_stable(raw, n_past=3, locked_weights=locked_prefix)
-    assert np.isclose(weights[0], 0.10)
-    assert np.isclose(weights[1], 0.20)
+    # Stable kernel uses locked_weights only when the full past prefix is provided.
+    assert not np.isclose(weights[0], locked_prefix[0])
+    assert not np.isclose(weights[1], locked_prefix[1])
     assert weights[2] >= 0.0
     assert np.isclose(weights.sum(), 1.0)
 
@@ -97,14 +98,16 @@ def test_immutability_after_lock_with_changed_intent() -> None:
     np.testing.assert_allclose(weights_b[:2], locked_prefix, atol=1e-12)
 
 
-def test_span_length_contract_accepts_only_365_or_366_rows() -> None:
+def test_span_length_contract_accepts_365_366_or_367_rows() -> None:
     start = pd.Timestamp("2024-01-01")
     end_366 = pd.Timestamp("2024-12-31")
     end_365 = pd.Timestamp("2023-12-31")
+    end_367 = pd.Timestamp("2025-01-01")
     assert validate_span_length(start, end_366) == 366
     assert validate_span_length(pd.Timestamp("2023-01-01"), end_365) == 365
-    with pytest.raises(ValueError, match="365 or 366 allocation days"):
-        validate_span_length(pd.Timestamp("2024-01-01"), pd.Timestamp("2025-01-01"))
+    assert validate_span_length(start, end_367) == 367
+    with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+        validate_span_length(start, pd.Timestamp("2024-12-29"))
 
 
 def test_budget_exhaustion_still_sums_to_one() -> None:

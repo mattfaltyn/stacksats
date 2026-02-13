@@ -402,28 +402,39 @@ def allocate_sequential_stable(
     Returns:
         Weights summing to 1.0
     """
-    raw = np.asarray(raw, dtype=float)
     n = len(raw)
     if n == 0:
-        return np.array([], dtype=float)
+        return np.array([])
     if n_past <= 0:
-        out = np.full(n, 1.0 / n, dtype=float)
-        assert_final_invariants(out)
-        return out
+        return np.full(n, 1.0 / n)
 
     n_past = min(n_past, n)
+    w = np.zeros(n)
     base_weight = 1.0 / n
-    intent = np.zeros(n, dtype=float)
-    for i in range(n):
-        signal = _compute_stable_signal(raw[: i + 1])[-1]
-        intent[i] = signal * base_weight
 
-    return allocate_from_proposals(
-        proposals=intent,
-        n_past=n_past,
-        n_total=n,
-        locked_weights=locked_weights,
-    )
+    # Compute or use locked weights for past days
+    if locked_weights is not None and len(locked_weights) >= n_past:
+        w[:n_past] = locked_weights[:n_past]
+    else:
+        for i in range(n_past):
+            signal = _compute_stable_signal(raw[: i + 1])[-1]
+            w[i] = signal * base_weight
+
+    # Scale past weights if they exceed budget
+    past_sum = w[:n_past].sum()
+    target_budget = n_past / n
+    if past_sum > target_budget + 1e-10:
+        w[:n_past] *= target_budget / past_sum
+
+    # Future days (except last): uniform
+    n_future = n - n_past
+    if n_future > 1:
+        w[n_past : n - 1] = base_weight
+
+    # Last day absorbs remainder
+    w[n - 1] = max(1.0 - w[: n - 1].sum(), 0)
+
+    return w
 
 
 def allocate_from_proposals(

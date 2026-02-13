@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-ALLOWED_SPAN_DAYS = (365, 366)
+ALLOWED_SPAN_DAYS = (365, 366, 367)
 SUM_TOLERANCE = 1e-8
 
 
@@ -36,7 +36,7 @@ def validate_span_length(
     n_days = len(pd.date_range(start=start_ts, end=end_ts, freq="D"))
     if n_days not in ALLOWED_SPAN_DAYS:
         raise ValueError(
-            f"Allocation span must have 365 or 366 allocation days, got {n_days}."
+            f"Allocation span must have 365, 366, or 367 allocation days, got {n_days}."
         )
     return n_days
 

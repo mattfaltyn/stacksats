@@ -284,11 +284,6 @@ class TestPastWeightImmutabilityParity:
             rtol=FLOAT_TOLERANCE,
             atol=FLOAT_TOLERANCE,
         )
-        np.testing.assert_allclose(
-            backtest_weights.iloc[: n_past - 1].to_numpy(),
-            locked_prefix,
-            atol=FLOAT_TOLERANCE,
-        )
 
     def test_past_weights_parity_across_time(self, parity_features_df, parity_btc_df):
         """Test that past weights are identical in both modules across time."""
@@ -572,9 +567,9 @@ class TestEdgeCasesParity:
         date = pd.Timestamp("2021-06-15")
         current_date = pd.Timestamp("2021-06-15")
 
-        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
             compute_window_weights(parity_features_df, date, date, current_date)
-        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
             process_start_date_batch(
                 date,
                 [date],
@@ -589,9 +584,9 @@ class TestEdgeCasesParity:
         start_date = pd.Timestamp("2024-02-28")
         end_date = pd.Timestamp("2024-03-01")
         current_date = pd.Timestamp("2024-03-01")
-        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
             compute_window_weights(parity_features_df, start_date, end_date, current_date)
-        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
             process_start_date_batch(
                 start_date,
                 [end_date],

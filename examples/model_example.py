@@ -1,75 +1,51 @@
-"""Example strategy using feature/signal/target-profile hooks.
+"""Example strategy wired to StackSats model_development signal logic.
 
-Users define transformed features and signal formulas.
-Framework computes final iterative allocation weights.
-
-This example uses the batch hook (`build_target_profile`).
-For day-by-day control, strategies can alternatively implement `propose_weight(state)`.
+The strategy computes the same feature set and dynamic multipliers as
+`stacksats.model_development`, then hands absolute target magnitudes to the
+StackSats framework allocation kernel.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
-from stacksats import BacktestConfig, BaseStrategy, StrategyContext, TargetProfile, ValidationConfig
-
-
-@dataclass(frozen=True)
-class ExampleConfig:
-    value_weight: float = 0.7
-    trend_weight: float = 0.3
-    strength: float = 4.0
-    trend_lookback_days: int = 30
+from stacksats import model_development as model_lib
+from stacksats import (
+    BacktestConfig,
+    BaseStrategy,
+    StrategyContext,
+    TargetProfile,
+    ValidationConfig,
+)
 
 
 class ExampleMVRVStrategy(BaseStrategy):
-    """Example strategy with user-owned signals and framework-owned allocation."""
+    """Model-equivalent strategy using StackSats production signal formulas."""
 
     strategy_id = "example-mvrv"
-    version = "2.0.0"
-    description = "Example hook-based strategy where framework performs iteration."
+    version = "3.0.0"
+    description = "Uses stacksats.model_development feature engineering and multiplier logic."
 
-    def __init__(
-        self,
-        value_weight: float = 0.7,
-        trend_weight: float = 0.3,
-        strength: float = 4.0,
-        trend_lookback_days: int = 30,
-    ):
-        self.cfg = ExampleConfig(
-            value_weight=value_weight,
-            trend_weight=trend_weight,
-            strength=strength,
-            trend_lookback_days=trend_lookback_days,
-        )
+    @staticmethod
+    def _clean_array(values: pd.Series) -> np.ndarray:
+        arr = values.to_numpy(dtype=float)
+        return np.where(np.isfinite(arr), arr, 0.0)
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        window = ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
-        if window.empty:
-            return window
-        price = window[ctx.btc_price_col]
-        trend = price.pct_change(self.cfg.trend_lookback_days).fillna(0.0)
-        window["trend_signal_input"] = trend.clip(-1.0, 1.0)
-        return window
+        # Runner already passes precomputed model features in ctx.features_df.
+        # Recomputing here drops raw MVRV inputs and degrades parity with Modal.
+        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
 
     def build_signals(
         self,
         ctx: StrategyContext,
         features_df: pd.DataFrame,
     ) -> dict[str, pd.Series]:
-        del ctx
-        value_signal = -features_df.get(
-            "mvrv_zscore",
-            pd.Series(0.0, index=features_df.index),
-        ).clip(-4, 4)
-        trend_signal = -features_df["trend_signal_input"]
-        return {
-            "value": value_signal,
-            "trend": trend_signal,
-        }
+        del ctx, features_df
+        return {}
 
     def build_target_profile(
         self,
@@ -77,13 +53,52 @@ class ExampleMVRVStrategy(BaseStrategy):
         features_df: pd.DataFrame,
         signals: dict[str, pd.Series],
     ) -> TargetProfile:
-        # Batch hook: return per-day preference intent; framework handles iteration.
-        del ctx, features_df
-        preference = (
-            (self.cfg.value_weight * signals["value"])
-            + (self.cfg.trend_weight * signals["trend"])
-        ) * self.cfg.strength
-        return TargetProfile(values=preference, mode="preference")
+        del ctx, signals
+        if features_df.empty:
+            return TargetProfile(values=pd.Series(dtype=float), mode="absolute")
+
+        n = len(features_df.index)
+        base = np.ones(n, dtype=float) / n
+
+        price_vs_ma = self._clean_array(features_df["price_vs_ma"])
+        mvrv_zscore = self._clean_array(features_df["mvrv_zscore"])
+        mvrv_gradient = self._clean_array(features_df["mvrv_gradient"])
+
+        if "mvrv_percentile" in features_df.columns:
+            mvrv_percentile = self._clean_array(features_df["mvrv_percentile"])
+            mvrv_percentile = np.where(mvrv_percentile == 0.0, 0.5, mvrv_percentile)
+        else:
+            mvrv_percentile = None
+
+        if "mvrv_acceleration" in features_df.columns:
+            mvrv_acceleration = self._clean_array(features_df["mvrv_acceleration"])
+        else:
+            mvrv_acceleration = None
+
+        if "mvrv_volatility" in features_df.columns:
+            mvrv_volatility = self._clean_array(features_df["mvrv_volatility"])
+            mvrv_volatility = np.where(mvrv_volatility == 0.0, 0.5, mvrv_volatility)
+        else:
+            mvrv_volatility = None
+
+        if "signal_confidence" in features_df.columns:
+            signal_confidence = self._clean_array(features_df["signal_confidence"])
+            signal_confidence = np.where(signal_confidence == 0.0, 0.5, signal_confidence)
+        else:
+            signal_confidence = None
+
+        multiplier = model_lib.compute_dynamic_multiplier(
+            price_vs_ma,
+            mvrv_zscore,
+            mvrv_gradient,
+            mvrv_percentile,
+            mvrv_acceleration,
+            mvrv_volatility,
+            signal_confidence,
+        )
+        raw = base * multiplier
+        absolute = pd.Series(raw, index=features_df.index, dtype=float)
+        return TargetProfile(values=absolute, mode="absolute")
 
 
 def main() -> None:

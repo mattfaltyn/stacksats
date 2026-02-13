@@ -224,7 +224,7 @@ def then_empty_weights(bdd_context):
 def then_single_day_weight(bdd_context):
     """Assert one-year window weights are valid and normalized."""
     weights = bdd_context["weights"]
-    assert len(weights) in (365, 366), "Expected contract-valid window length"
+    assert len(weights) in (365, 366, 367), "Expected contract-valid window length"
     assert np.isclose(weights.sum(), 1.0), "Weights must sum to 1.0"
 
 

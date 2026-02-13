@@ -318,7 +318,7 @@ class TestImpossibleFloor:
         start_date = pd.Timestamp("2025-01-01")
         end_date = pd.Timestamp("2025-01-02")
 
-        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
             process_start_date_batch(
                 start_date,
                 [end_date],

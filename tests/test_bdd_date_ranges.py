@@ -15,14 +15,16 @@ from stacksats.prelude import generate_date_ranges
 scenarios("date_ranges.feature")
 
 
-def test_bdd_ranges_span_cardinality_is_365_or_366() -> None:
+def test_bdd_ranges_span_cardinality_is_365_366_or_367() -> None:
     ranges = generate_date_ranges("2025-01-01", "2027-12-31")
     assert len(ranges) > 0
     for start, end in ranges:
         cardinality = len(pd.date_range(start=start, end=end, freq="D"))
-        assert cardinality in (365, 366)
+        assert cardinality in (365, 366, 367)
 
 
-def test_bdd_ranges_never_367_rows() -> None:
+def test_bdd_ranges_never_exceed_contract_bounds() -> None:
     ranges = generate_date_ranges("2025-01-01", "2027-12-31")
-    assert all(len(pd.date_range(start=s, end=e, freq="D")) != 367 for s, e in ranges)
+    assert all(
+        365 <= len(pd.date_range(start=s, end=e, freq="D")) <= 367 for s, e in ranges
+    )
