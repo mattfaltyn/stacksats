@@ -360,6 +360,10 @@ def compute_cycle_spd(
 
         # Compute weights using strategy_function
         window_feat = full_feat.loc[window_start:window_end]
+        if len(window_feat) not in (365, 366):
+            # Contract-enforced kernel accepts only 365/366-day windows.
+            # Skip partial windows when features do not cover the full span.
+            continue
         weight_slice = strategy_function(window_feat)
         if weight_slice.empty:
             # Some strategies may return empty weights for low-feature windows.

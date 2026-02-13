@@ -156,8 +156,8 @@ def when_process_batch(sample_features_df, sample_btc_df, bdd_context):
     elif "end_date" in bdd_context:
         end_dates = [bdd_context["end_date"]]
     else:
-        end_dates = [pd.Timestamp("2024-06-30")]
-    current_date = bdd_context.get("current_date", pd.Timestamp("2024-12-29"))
+        end_dates = [pd.Timestamp("2025-01-05")]
+    current_date = bdd_context.get("current_date", pd.Timestamp("2025-01-05"))
 
     result = process_start_date_batch(
         start_date,

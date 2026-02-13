@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
 from .btc_price_fetcher import fetch_btc_price_robust
 from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
+from .prelude import generate_date_ranges, group_ranges_by_start_date
 from .strategy_types import BaseStrategy, StrategyContext
 
 # Load environment variables from .env file
@@ -61,7 +62,7 @@ def process_start_date_batch(
     btc_price_col,
     strategy=None,
     locked_weights_by_end_date: dict[str, np.ndarray] | None = None,
-    enforce_span_contract: bool = False,
+    enforce_span_contract: bool = True,
 ):
     """Process all date ranges sharing the same start_date.
 
@@ -148,11 +149,21 @@ def load_locked_weights_for_window(
     end_date: str,
     lock_end_date: str,
 ) -> np.ndarray | None:
-    """Load immutable locked prefix from DB for a specific allocation window."""
+    """Load immutable locked prefix from DB for a specific allocation window.
+
+    The returned array is validated to be a contiguous prefix from start_date
+    through min(lock_end_date, end_date), with no missing DB days.
+    """
+    start_ts = pd.to_datetime(start_date)
+    end_ts = pd.to_datetime(end_date)
+    lock_end_ts = min(pd.to_datetime(lock_end_date), end_ts)
+    if lock_end_ts < start_ts:
+        return None
+
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT weight
+            SELECT DCA_date, weight
             FROM bitcoin_dca
             WHERE start_date = %s
               AND end_date = %s
@@ -165,7 +176,19 @@ def load_locked_weights_for_window(
         rows = cur.fetchall()
     if not rows:
         return None
-    return np.array([float(row[0]) for row in rows], dtype=float)
+
+    expected_dates = pd.date_range(start=start_ts, end=lock_end_ts, freq="D")
+    actual_dates = pd.to_datetime([row[0] for row in rows]).normalize()
+    if len(actual_dates) != len(expected_dates) or not actual_dates.equals(expected_dates):
+        missing = expected_dates.difference(actual_dates)
+        extra = actual_dates.difference(expected_dates)
+        raise ValueError(
+            "Locked history is not a contiguous prefix for "
+            f"{start_date}..{end_date}. Missing={list(missing.strftime('%Y-%m-%d'))}, "
+            f"extra={list(extra.strftime('%Y-%m-%d'))}"
+        )
+
+    return np.array([float(row[1]) for row in rows], dtype=float)
 
 
 def get_db_connection():

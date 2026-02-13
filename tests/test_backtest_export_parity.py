@@ -499,7 +499,7 @@ class TestDayByDayProgressionParity:
     def test_daily_progression_parity(self, parity_features_df, parity_btc_df):
         """Test that simulating day-by-day produces identical weights."""
         start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-01-31")  # Short range for speed
+        end_date = pd.Timestamp("2025-12-31")
 
         # Simulate daily progression
         for day_offset in range(0, 31, 5):  # Check every 5 days
@@ -536,7 +536,7 @@ class TestDayByDayProgressionParity:
     ):
         """Test that past weights remain stable as we progress day by day."""
         start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-01-31")
+        end_date = pd.Timestamp("2025-12-31")
 
         previous_weights = None
         for day_offset in range(31):
@@ -568,65 +568,43 @@ class TestEdgeCasesParity:
     """Test edge cases produce identical results in both modules."""
 
     def test_single_day_range(self, parity_features_df, parity_btc_df):
-        """Test single-day range produces identical results."""
+        """Single-day ranges are rejected by the framework span contract."""
         date = pd.Timestamp("2021-06-15")
         current_date = pd.Timestamp("2021-06-15")
 
-        # Backtest
-        backtest_weights = compute_window_weights(
-            parity_features_df, date, date, current_date
-        )
-
-        # Export
-        result = process_start_date_batch(
-            date,
-            [date],
-            parity_features_df,
-            parity_btc_df,
-            current_date,
-            PRICE_COL,
-        )
-
-        assert len(backtest_weights) == 1
-        assert len(result) == 1
-        assert np.isclose(backtest_weights.iloc[0], 1.0)
-        assert np.isclose(result["weight"].iloc[0], 1.0)
+        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+            compute_window_weights(parity_features_df, date, date, current_date)
+        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+            process_start_date_batch(
+                date,
+                [date],
+                parity_features_df,
+                parity_btc_df,
+                current_date,
+                PRICE_COL,
+            )
 
     def test_leap_year_range(self, parity_features_df, parity_btc_df):
-        """Test leap year range produces identical results."""
+        """Short leap-crossing ranges are rejected by the span contract."""
         start_date = pd.Timestamp("2024-02-28")
-        end_date = pd.Timestamp("2024-03-01")  # Crosses Feb 29
+        end_date = pd.Timestamp("2024-03-01")
         current_date = pd.Timestamp("2024-03-01")
-
-        # Backtest
-        backtest_weights = compute_window_weights(
-            parity_features_df, start_date, end_date, current_date
-        )
-
-        # Export
-        result = process_start_date_batch(
-            start_date,
-            [end_date],
-            parity_features_df,
-            parity_btc_df,
-            current_date,
-            PRICE_COL,
-        )
-        export_weights = result.set_index("DCA_date")["weight"]
-
-        # Should have 3 days (Feb 28, Feb 29, Mar 1)
-        assert len(backtest_weights) == 3
-        assert len(export_weights) == 3
-        np.testing.assert_allclose(
-            backtest_weights.values,
-            export_weights.values,
-            rtol=FLOAT_TOLERANCE,
-        )
+        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+            compute_window_weights(parity_features_df, start_date, end_date, current_date)
+        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+            process_start_date_batch(
+                start_date,
+                [end_date],
+                parity_features_df,
+                parity_btc_df,
+                current_date,
+                PRICE_COL,
+            )
 
     def test_current_date_equals_start(self, parity_features_df, parity_btc_df):
         """Test when current_date equals start_date."""
         start_date = pd.Timestamp("2025-06-01")
-        end_date = pd.Timestamp("2025-06-30")
+        end_date = pd.Timestamp("2026-05-31")
         current_date = start_date  # Only first day is "past"
 
         # Backtest

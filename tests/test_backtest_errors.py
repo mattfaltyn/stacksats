@@ -159,7 +159,7 @@ class TestBoundaryConditions:
         assert len(result) <= 1
 
     def test_very_short_date_range(self, sample_features_df):
-        """Test weight computation with very short date range."""
+        """Very short ranges should fail strict span validation."""
         backtest._FEATURES_DF = sample_features_df
 
         # Two-day window
@@ -169,18 +169,16 @@ class TestBoundaryConditions:
         window_feat = sample_features_df.loc[start_date:end_date]
 
         if len(window_feat) > 0:
-            result = compute_weights_modal(window_feat)
-            assert len(result) == len(window_feat)
+            with pytest.raises(ValueError, match="365 or 366 allocation days"):
+                compute_weights_modal(window_feat)
 
     def test_date_range_at_data_boundaries(self, sample_btc_df, sample_features_df):
-        """Test behavior when requesting data at the boundaries of available data."""
+        """Boundary windows must still respect 365/366-day contract."""
         backtest._FEATURES_DF = sample_features_df
 
         # Use dates at the start of features
         first_date = sample_features_df.index.min()
-        window_feat = sample_features_df.loc[
-            first_date : first_date + pd.Timedelta(days=30)
-        ]
+        window_feat = sample_features_df.loc[first_date : first_date + pd.Timedelta(days=364)]
 
         if len(window_feat) > 0:
             result = compute_weights_modal(window_feat)

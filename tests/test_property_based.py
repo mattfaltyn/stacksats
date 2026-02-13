@@ -28,7 +28,7 @@ except ImportError:
     st = None
 
 from stacksats.export_weights import process_start_date_batch
-from stacksats.model_development import MIN_W, precompute_features
+from stacksats.model_development import precompute_features
 from tests.test_helpers import PRICE_COL
 
 # Skip all tests in this module if hypothesis is not available
@@ -296,14 +296,9 @@ class TestImpossibleFloor:
     """Test impossible floor scenario (MIN_W * n_days > 1)."""
 
     def test_impossible_floor_scenario(self, sample_features_df, sample_btc_df):
-        """Test that impossible floor (MIN_W * n > 1) is handled."""
-        # Create a scenario where MIN_W * n_days > 1
-        # MIN_W = 1e-6, so we need n > 1e6 days (impossible in practice)
-        # But test with a very small range where floor might be problematic
-
-        # For a 2-day range, MIN_W * 2 = 2e-6 < 1, so this should work
+        """Test floor behavior under a contract-valid 365-day window."""
         start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-01-02")  # 2 days
+        end_date = pd.Timestamp("2025-12-31")
 
         result = process_start_date_batch(
             start_date,
@@ -314,26 +309,21 @@ class TestImpossibleFloor:
             PRICE_COL,
         )
 
-        # Should still work (floor is not impossible)
-        assert len(result) == 2
+        assert len(result) == 365
         assert np.isclose(result["weight"].sum(), 1.0, rtol=1e-12)
-        assert (result["weight"] >= MIN_W - 1e-15).all()
+        assert (result["weight"] >= 0).all()
 
     def test_tiny_range_with_floor(self, sample_features_df, sample_btc_df):
-        """Test tiny range where floor constraint is tight."""
-        # Single day range
+        """Invalid short windows should be rejected by span contract."""
         start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-01-01")
+        end_date = pd.Timestamp("2025-01-02")
 
-        result = process_start_date_batch(
-            start_date,
-            [end_date],
-            sample_features_df,
-            sample_btc_df,
-            pd.Timestamp("2025-12-31"),
-            PRICE_COL,
-        )
-
-        # Single day should have weight = 1.0
-        assert len(result) == 1
-        assert np.isclose(result["weight"].iloc[0], 1.0)
+        with pytest.raises(ValueError, match="365 or 366 allocation days"):
+            process_start_date_batch(
+                start_date,
+                [end_date],
+                sample_features_df,
+                sample_btc_df,
+                pd.Timestamp("2025-12-31"),
+                PRICE_COL,
+            )

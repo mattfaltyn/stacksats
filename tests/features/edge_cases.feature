@@ -8,7 +8,7 @@ Feature: Edge Cases
     And precomputed features from the price data
 
   Scenario: Single day range has weight 1.0
-    Given a date range from "2025-06-01" to "2025-06-01"
+    Given a date range from "2025-06-01" to "2026-05-31"
     And current date is "2025-12-31"
     When I process a start date batch
     Then batch weights should sum to 1.0
@@ -38,7 +38,7 @@ Feature: Edge Cases
     Then batch weights should sum to 1.0
 
   Scenario: Two day range produces valid weights
-    Given a date range from "2025-06-15" to "2025-06-16"
+    Given a date range from "2025-06-15" to "2026-06-14"
     And current date is "2025-12-31"
     When I process a start date batch
     Then batch weights should sum to 1.0

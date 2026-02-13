@@ -613,7 +613,7 @@ def sample_weights_df(sample_features_df_validate, sample_btc_df_validate):
     from tests.test_helpers import PRICE_COL
 
     start_date = pd.Timestamp("2025-01-01")
-    end_dates = [pd.Timestamp("2025-06-30"), pd.Timestamp("2025-12-31")]
+    end_dates = [pd.Timestamp("2025-12-31"), pd.Timestamp("2026-01-01")]
     current_date = pd.Timestamp("2025-12-31")
 
     return process_start_date_batch(

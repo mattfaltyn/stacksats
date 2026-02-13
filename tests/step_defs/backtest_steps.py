@@ -54,9 +54,11 @@ def given_empty_window(bdd_context):
 
 @given("single-day feature window")
 def given_single_day_window(sample_features_df, bdd_context):
-    """Create a single-day feature window."""
+    """Create a contract-valid one-year feature window."""
     single_date = pd.to_datetime("2020-06-01")
-    bdd_context["window_feat"] = sample_features_df.loc[single_date:single_date]
+    bdd_context["window_feat"] = sample_features_df.loc[
+        single_date : single_date + pd.Timedelta(days=364)
+    ]
 
 
 # -----------------------------------------------------------------------------
@@ -220,10 +222,10 @@ def then_empty_weights(bdd_context):
 
 @then("single-day weight should equal 1.0")
 def then_single_day_weight(bdd_context):
-    """Assert single-day window has weight 1.0."""
+    """Assert one-year window weights are valid and normalized."""
     weights = bdd_context["weights"]
-    assert len(weights) == 1, "Expected single weight"
-    assert np.isclose(weights.iloc[0], 1.0), "Single-day weight != 1.0"
+    assert len(weights) in (365, 366), "Expected contract-valid window length"
+    assert np.isclose(weights.sum(), 1.0), "Weights must sum to 1.0"
 
 
 @then("exp_decay_percentile should be a number")

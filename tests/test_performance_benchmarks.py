@@ -219,12 +219,12 @@ class TestBatchProcessingBenchmark:
     def test_process_multiple_date_ranges(
         self, benchmark_features_df, benchmark_btc_df, benchmark
     ):
-        """Benchmark processing 10 date ranges from same start date."""
+        """Benchmark processing multiple valid ranges from same start date."""
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        start_date = pd.Timestamp("2025-01-01")
-        end_dates = [start_date + pd.DateOffset(months=i) for i in range(1, 11)]
+        start_date = pd.Timestamp("2024-01-01")
+        end_dates = [pd.Timestamp("2024-12-30"), pd.Timestamp("2024-12-31")]
         current_date = pd.Timestamp("2025-12-31")
 
         result = benchmark(
@@ -322,9 +322,9 @@ class TestPerformanceThresholds:
         )
 
     def test_batch_processing_under_1_second(self, perf_features_df, perf_btc_df):
-        """Verify batch processing 10 ranges completes in under 1 second."""
-        start_date = pd.Timestamp("2025-01-01")
-        end_dates = [start_date + pd.DateOffset(months=i) for i in range(1, 11)]
+        """Verify batch processing valid ranges completes in under 1 second."""
+        start_date = pd.Timestamp("2024-01-01")
+        end_dates = [pd.Timestamp("2024-12-30"), pd.Timestamp("2024-12-31")]
         current_date = pd.Timestamp("2025-12-31")
 
         start = time.perf_counter()

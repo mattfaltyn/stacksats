@@ -19,6 +19,7 @@ from .framework_contract import (
     apply_clipped_weight,
     assert_final_invariants,
     compute_n_past,
+    validate_span_length,
     validate_locked_prefix,
 )
 
@@ -921,6 +922,7 @@ def compute_window_weights(
     Returns:
         Series of weights summing to 1.0
     """
+    validate_span_length(start_date, end_date)
     preference = compute_preference_scores(
         features_df=features_df,
         start_date=start_date,

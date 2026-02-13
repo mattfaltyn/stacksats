@@ -122,7 +122,7 @@ class TestWeightComputationPerformance:
         backtest._FEATURES_DF = sample_features_df
 
         start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-06-30")
+        end_date = pd.Timestamp("2024-12-31")
 
         if start_date not in sample_features_df.index:
             pytest.skip("Start date not in features index")

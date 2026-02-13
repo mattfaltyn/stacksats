@@ -238,12 +238,10 @@ def run_export(
         RANGE_END,
         RANGE_START,
         get_db_connection,
-        generate_date_ranges,
-        group_ranges_by_start_date,
         load_locked_weights_for_window,
     )
     from .model_development import precompute_features
-    from .prelude import load_data
+    from .prelude import generate_date_ranges, group_ranges_by_start_date, load_data
 
     # Use defaults if not provided
     range_start = range_start or RANGE_START
@@ -286,31 +284,27 @@ def run_export(
     current_date_str = current_date.strftime("%Y-%m-%d")
     lock_end_date_str = (current_date - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
-    # Load immutable historical lock prefixes from production DB if available.
+    # Load immutable historical lock prefixes from production DB.
+    # Fail closed: framework contract requires lock immutability semantics.
     locked_by_start_end: dict[str, dict[str, np.ndarray]] = {}
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
-        try:
-            for start_date in sorted_start_dates:
-                start_key = start_date.strftime("%Y-%m-%d")
-                per_end: dict[str, np.ndarray] = {}
-                for end_date in grouped_ranges[start_date]:
-                    end_key = end_date.strftime("%Y-%m-%d")
-                    locked = load_locked_weights_for_window(
-                        conn,
-                        start_key,
-                        end_key,
-                        lock_end_date_str,
-                    )
-                    if locked is not None:
-                        per_end[end_key] = locked
-                locked_by_start_end[start_key] = per_end
-        finally:
-            conn.close()
-    except Exception as exc:
-        print(f"Warning: could not load locked DB prefixes, continuing unlocked ({exc})")
-        locked_by_start_end = {}
-
+        for start_date in sorted_start_dates:
+            start_key = start_date.strftime("%Y-%m-%d")
+            per_end: dict[str, np.ndarray] = {}
+            for end_date in grouped_ranges[start_date]:
+                end_key = end_date.strftime("%Y-%m-%d")
+                locked = load_locked_weights_for_window(
+                    conn,
+                    start_key,
+                    end_key,
+                    lock_end_date_str,
+                )
+                if locked is not None:
+                    per_end[end_key] = locked
+            locked_by_start_end[start_key] = per_end
+    finally:
+        conn.close()
     # Prepare arguments for batches
     batch_args = []
     for start_date in sorted_start_dates:
