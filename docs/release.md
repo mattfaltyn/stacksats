@@ -99,11 +99,9 @@ The tag is the source of truth for the version. No manual version bump is requir
 - Verify package page on PyPI.
 - Install from PyPI in a fresh virtual environment.
 - Verify entry points:
-  - `stacksats-backtest`
-  - `stacksats-export`
+  - `stacksats`
   - `stacksats-plot-mvrv`
   - `stacksats-plot-weights`
-  - `stacksats-validate`
 
 ## Trusted Publishing (OIDC) Setup
 

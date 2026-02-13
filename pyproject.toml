@@ -64,11 +64,9 @@ dev = [
 ]
 
 [project.scripts]
-stacksats-backtest = "stacksats.backtest:main"
-stacksats-export = "stacksats.export_weights:main"
+stacksats = "stacksats.cli:main"
 stacksats-plot-mvrv = "stacksats.plot_mvrv:main"
 stacksats-plot-weights = "stacksats.plot_weights:main"
-stacksats-validate = "stacksats.api:validate_strategy_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

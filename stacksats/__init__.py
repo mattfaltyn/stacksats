@@ -1,21 +1,34 @@
 """StackSats package public API."""
 
-from .api import BacktestResult, ValidationResult, run_backtest, validate_strategy
+from .api import BacktestResult, ValidationResult
 from .loader import load_strategy
 from .model_development import precompute_features
 from .prelude import load_data
-from .strategies.base import CallableWindowStrategy, WindowStrategy
 from .strategies.mvrv import MVRVStrategy
+from .strategy_types import (
+    BacktestConfig,
+    BaseStrategy,
+    DayState,
+    ExportConfig,
+    StrategyArtifactSet,
+    StrategyContext,
+    TargetProfile,
+    ValidationConfig,
+)
 
 __all__ = [
     "BacktestResult",
-    "CallableWindowStrategy",
+    "BacktestConfig",
+    "BaseStrategy",
+    "DayState",
+    "ExportConfig",
     "MVRVStrategy",
+    "StrategyArtifactSet",
+    "StrategyContext",
+    "TargetProfile",
     "ValidationResult",
-    "WindowStrategy",
+    "ValidationConfig",
     "load_strategy",
     "load_data",
     "precompute_features",
-    "run_backtest",
-    "validate_strategy",
 ]

@@ -64,12 +64,14 @@ def main() -> int:
         ),
         (
             "Validate strategy (basic)",
-            ["stacksats-validate", "--strategy", EXAMPLE_SPEC],
+            ["stacksats", "strategy", "validate", "--strategy", EXAMPLE_SPEC],
         ),
         (
             "Validate strategy (with options)",
             [
-                "stacksats-validate",
+                "stacksats",
+                "strategy",
+                "validate",
                 "--strategy",
                 EXAMPLE_SPEC,
                 "--start-date",
@@ -82,12 +84,14 @@ def main() -> int:
         ),
         (
             "Backtest (basic)",
-            ["stacksats-backtest", "--strategy", EXAMPLE_SPEC],
+            ["stacksats", "strategy", "backtest", "--strategy", EXAMPLE_SPEC],
         ),
         (
             "Backtest (with options)",
             [
-                "stacksats-backtest",
+                "stacksats",
+                "strategy",
+                "backtest",
                 "--strategy",
                 EXAMPLE_SPEC,
                 "--start-date",
@@ -100,6 +104,18 @@ def main() -> int:
                 "model-example",
             ],
         ),
+        (
+            "Export strategy artifacts",
+            [
+                "stacksats",
+                "strategy",
+                "export",
+                "--strategy",
+                EXAMPLE_SPEC,
+                "--output-dir",
+                "output",
+            ],
+        ),
     ]
 
     for label, cmd in steps:
@@ -107,24 +123,6 @@ def main() -> int:
             passed += 1
         else:
             failed += 1
-
-    database_url = env.get("DATABASE_URL", "")
-    if database_url and database_url != "postgresql://...":
-        if run_step(
-            "Export weights to database",
-            ["stacksats-export", "--strategy", EXAMPLE_SPEC],
-            cwd=root_dir,
-            env=env,
-        ):
-            passed += 1
-        else:
-            failed += 1
-    else:
-        skip_step(
-            "Export weights to database",
-            "DATABASE_URL is not set to a real Postgres URL",
-        )
-        skipped += 1
 
     if shutil.which("modal", path=env["PATH"]):
         modal_env = env.copy()

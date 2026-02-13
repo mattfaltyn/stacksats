@@ -5,6 +5,11 @@ Use this checklist before submitting or deploying a strategy.
 It is designed to answer one core question:
 **"Does my model avoid forward-looking leakage and behave robustly out-of-sample?"**
 
+Framework invariants are defined in `docs/framework.md`. Validation should confirm:
+- per-day feasibility projection is respected,
+- remaining-budget enforcement holds,
+- past weights remain locked/immutable.
+
 ## Inputs You Need
 
 - A strategy spec in format: `module_or_path:ClassName`
@@ -30,7 +35,7 @@ pip install -r requirements-dev.txt
 Run package-level validation:
 
 ```bash
-stacksats-validate \
+stacksats strategy validate \
   --strategy "$STRATEGY_SPEC" \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
@@ -109,7 +114,7 @@ Pass criteria:
 Run a backtest and inspect output artifacts:
 
 ```bash
-stacksats-backtest \
+stacksats strategy backtest \
   --strategy "$STRATEGY_SPEC" \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
@@ -127,7 +132,7 @@ Review:
 
 Go if all are true:
 
-- `stacksats-validate` passes with forward leakage and weight constraints marked true
+- `stacksats strategy validate` passes with forward leakage and weight constraints marked true
 - Forward-looking and stability tests pass
 - Cross-validation/statistical validation show no leakage/overfitting red flags
 - Full tests and lint pass

@@ -1,14 +1,15 @@
 """Strategy interfaces and built-ins."""
 
-from .base import CallableWindowStrategy, WindowStrategy
+from .base import BaseStrategy, DayState, StrategyContext
 from .examples import MomentumStrategy, SimpleZScoreStrategy, UniformStrategy
 from .mvrv import MVRVStrategy
 
 __all__ = [
-    "CallableWindowStrategy",
+    "BaseStrategy",
+    "DayState",
     "MomentumStrategy",
     "MVRVStrategy",
     "SimpleZScoreStrategy",
+    "StrategyContext",
     "UniformStrategy",
-    "WindowStrategy",
 ]

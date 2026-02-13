@@ -5,278 +5,125 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats, developed by [Hypertrial](https://www.hypertrail.ai), is a Python package for developing and backtesting Bitcoin DCA ("stacking sats") allocation strategies.
+StackSats, developed by [Hypertrial](https://www.hypertrail.ai), is a Python package for strategy-first Bitcoin DCA ("stacking sats") research and execution.
 
-Learn more at [www.stackingsats.org](https://www.stackingsats.org)
+Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
-It provides:
-- A clean strategy interface (`WindowStrategy`)
-- Built-in and example strategies
-- A rolling-window backtest engine
-- Feature precomputation utilities
-- Validation checks for leakage, constraints, and win-rate
+## Framework Principles
+
+- The framework owns budget math, iteration, feasibility clipping, and lock semantics.
+- Users own features, signals, hyperparameters, and daily intent.
+- Strategy hooks support either day-level intent (`propose_weight(state)`) or batch intent (`build_target_profile(...)`).
+- The same sealed allocation kernel runs in local, backtest, and production.
+
+See `docs/framework.md` for the canonical contract.
 
 ## Installation
-
-Install core package for local model development:
 
 ```bash
 pip install stacksats
 ```
 
-For local development from source:
+For local development:
 
 ```bash
 pip install -e .
 pip install -r requirements-dev.txt
 ```
 
-Install deployment dependencies only if needed:
+Optional deploy extras:
 
 ```bash
 pip install "stacksats[deploy]"
 ```
 
-## Project Links and Support
-
-- Issues: <https://github.com/hypertrial/stacksats/issues>
-- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
-- Security Policy: [`SECURITY.md`](SECURITY.md)
-- Contributing Guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Release Process: [`docs/release.md`](docs/release.md)
-
-## Quick Start (write your own strategy file)
+## Quick Start
 
 Create `my_strategy.py`:
 
 ```python
-import numpy as np
 import pandas as pd
 
-from stacksats import run_backtest, validate_strategy
+from stacksats import BaseStrategy, StrategyContext, TargetProfile
 
 
-class MyStrategy:
-    def compute_weights(
+class MyStrategy(BaseStrategy):
+    strategy_id = "my-strategy"
+    version = "1.0.0"
+    description = "Example user strategy."
+
+    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
+        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+
+    def build_signals(
+        self, ctx: StrategyContext, features_df: pd.DataFrame
+    ) -> dict[str, pd.Series]:
+        del ctx
+        value_signal = -features_df["mvrv_zscore"].clip(-4, 4)
+        trend_signal = -features_df["price_vs_ma"].clip(-1, 1)
+        return {"value": value_signal, "trend": trend_signal}
+
+    def build_target_profile(
         self,
+        ctx: StrategyContext,
         features_df: pd.DataFrame,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        current_date: pd.Timestamp,
-    ) -> pd.Series:
-        del current_date
-        window = features_df.loc[start_date:end_date]
-        if window.empty:
-            return pd.Series(dtype=float)
+        signals: dict[str, pd.Series],
+    ) -> TargetProfile:
+        del ctx, features_df
+        preference = (0.7 * signals["value"]) + (0.3 * signals["trend"])
+        return TargetProfile(values=preference, mode="preference")
 
-        z = window.get("mvrv_zscore", pd.Series(0.0, index=window.index)).to_numpy()
-        ma = window.get("price_vs_ma", pd.Series(0.0, index=window.index)).to_numpy()
-        raw = np.exp((-1.2 * z) + (-0.8 * ma))
-        w = raw / raw.sum()
-        return pd.Series(w, index=window.index)
+    # Optional alternative hook:
+    # def propose_weight(self, state) -> float:
+    #     return state.uniform_weight
 
 
 if __name__ == "__main__":
     strategy = MyStrategy()
-
-    validation = validate_strategy(strategy)
+    validation = strategy.validate()
     print(validation.summary())
-
-    result = run_backtest(strategy, strategy_label="my-strategy")
+    result = strategy.backtest()
     print(result.summary())
     result.plot(output_dir="output")
     result.to_json("output/backtest_result.json")
 ```
 
-Run it directly:
+Run it:
 
 ```bash
 python my_strategy.py
 ```
 
-For a complete command reference using the included example file, see
-[`docs/commands.md`](docs/commands.md).
+## Strategy Lifecycle CLI
+
+```bash
+stacksats strategy validate --strategy my_strategy.py:MyStrategy
+stacksats strategy backtest --strategy my_strategy.py:MyStrategy --output-dir output
+stacksats strategy export --strategy my_strategy.py:MyStrategy --output-dir output
+```
+
+Artifacts are written to:
+
+```text
+output/<strategy_id>/<version>/<run_id>/
+```
 
 ## Public API
 
-Top-level package exports:
+Top-level exports:
 
-- `run_backtest()`: Run a rolling-window backtest for any strategy
-- `validate_strategy()`: Run submission-style validation checks
-- `load_data()`: Load BTC market data (with local cache support)
-- `precompute_features()`: Build model features from BTC data
-- `load_strategy()`: Load a strategy from `module_or_path:ClassName`
-- `BacktestResult`: Result object with summary/plot/serialization helpers
-- `ValidationResult`: Structured validation output
-- `WindowStrategy`, `CallableWindowStrategy`, `MVRVStrategy`
-
-`load_data()` also supports cache controls via optional keyword args:
-- `cache_dir` (default `~/.stacksats/cache`, set to `None` to disable local cache)
-- `max_age_hours` (default `24`, refresh threshold for cached CoinMetrics CSV)
-
-## Writing a Strategy
-
-Implement `compute_weights()` with this interface:
-
-```python
-def compute_weights(
-    self,
-    features_df: pd.DataFrame,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
-    current_date: pd.Timestamp,
-) -> pd.Series:
-    ...
-```
-
-Rules your strategy should satisfy:
-
-- Return a weight series indexed by dates in the selected window
-- Weights should be non-negative
-- Weights should sum to `1.0`
-- Avoid forward-looking data usage
-
-### Available Features
-
-Feature columns are generated by `precompute_features()` and typically include:
-
-- `PriceUSD_coinmetrics`
-- `price_ma`
-- `price_vs_ma`
-- `mvrv_zscore`
-- `mvrv_gradient`
-- `mvrv_percentile`
-- `mvrv_acceleration`
-- `mvrv_zone`
-- `mvrv_volatility`
-- `signal_confidence`
-
-## Built-in and Example Strategies
-
-### Built-in
-
-- `MVRVStrategy`: Default strategy from the package model.
-
-### Examples
-
-In `stacksats.strategies.examples`:
-
-- `UniformStrategy`
-- `SimpleZScoreStrategy`
-- `MomentumStrategy`
-
-These are lightweight templates for custom model development.
-
-## Backtesting
-
-Run the default built-in strategy:
-
-```bash
-stacksats-backtest
-```
-
-Run a custom strategy class from a file:
-
-```bash
-stacksats-backtest --strategy my_strategy.py:MyStrategy --start-date 2020-01-01 --end-date 2025-01-01
-```
-
-Use the Python API directly:
-
-```python
-from stacksats import MVRVStrategy, run_backtest
-
-result = run_backtest(MVRVStrategy(), strategy_label="default-mvrv")
-print(result.summary())
-```
-
-## Validation
-
-Validate built-in strategy:
-
-```bash
-stacksats-validate --start-date 2020-01-01 --end-date 2025-01-01
-```
-
-Validate a custom strategy class:
-
-```bash
-stacksats-validate --strategy my_strategy.py:MyStrategy --min-win-rate 50.0
-```
-
-## Command Line Tools
-
-Installed scripts:
-
-- `stacksats-backtest`
-- `stacksats-export`
-- `stacksats-plot-mvrv`
-- `stacksats-plot-weights`
-- `stacksats-validate`
-
-Custom-strategy flags:
-
-- `stacksats-backtest --strategy module_or_path:ClassName`
-- `stacksats-validate --strategy module_or_path:ClassName`
-- `stacksats-export --strategy module_or_path:ClassName`
-
-## Advanced: Deployment
-
-Deployment and infrastructure modules are optional:
-
-- `stacksats.export_weights`
-- `stacksats.modal_app`
-
-These require deployment extras:
-
-```bash
-pip install "stacksats[deploy]"
-```
-
-Deploy with built-in strategy:
-
-```bash
-modal deploy stacksats/modal_app.py
-```
-
-Deploy with custom strategy:
-
-```bash
-STACKSATS_STRATEGY=my_strategy.py:MyStrategy modal deploy stacksats/modal_app.py
-```
+- `BaseStrategy`, `StrategyContext`, `TargetProfile`
+- `BacktestConfig`, `ValidationConfig`, `ExportConfig`
+- `StrategyArtifactSet`
+- `BacktestResult`, `ValidationResult`
+- `load_strategy()`, `load_data()`, `precompute_features()`
+- `MVRVStrategy`
 
 ## Development
 
-Run tests:
-
 ```bash
 pytest tests/ -v
-```
-
-Verify documented command examples:
-
-```bash
-# Requires ./venv (for example: python -m venv venv && source venv/bin/activate && pip install -e .)
-python scripts/test_example_commands.py
-```
-
-Run lint:
-
-```bash
 ruff check .
 ```
 
-Release process: see `docs/release.md` and update `CHANGELOG.md` before tagging.
-
-## Contributors
-
-This project has benefited from contributions by researchers from the following universities:
-
-- Columbia University (Master of Data Science)
-- Cornell University (Master of Engineering in Management)
-- Georgia Institute of Technology (Master of Science in Analytics)
-- London School of Economics (Master of Science in Data Science)
-- University of British Columbia (Master of Data Science)
-- University of California, Davis (Master of Science in Business Analytics)
-- University of California, Irvine (Master of Data Science)
-- University of California, San Diego (Master of Quantitative Finance)
+For command examples using the packaged strategy template, see `docs/commands.md`.

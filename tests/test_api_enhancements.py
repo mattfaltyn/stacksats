@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stacksats.api import BacktestResult, ValidationResult, validate_strategy
+from stacksats.api import BacktestResult, ValidationResult
+from stacksats.strategy_types import BaseStrategy, StrategyContext, TargetProfile, ValidationConfig
 from stacksats.strategies.examples import (
     MomentumStrategy,
     SimpleZScoreStrategy,
@@ -122,12 +123,13 @@ def test_validation_result_summary_format():
 def test_validate_strategy_passes_with_uniform_strategy():
     """Uniform example strategy should satisfy validation when win-rate floor is relaxed."""
     btc_df = _sample_btc_df()
-    result = validate_strategy(
-        UniformStrategy(),
+    result = UniformStrategy().validate(
+        ValidationConfig(
+            start_date="2022-01-01",
+            end_date="2023-05-01",
+            min_win_rate=0.0,
+        ),
         btc_df=btc_df,
-        start_date="2022-01-01",
-        end_date="2023-05-01",
-        min_win_rate=0.0,
     )
 
     assert result.forward_leakage_ok is True
@@ -140,30 +142,32 @@ def test_validate_strategy_fails_weight_constraints_for_bad_strategy():
     """Invalid strategy should fail at backtest assertion on weight sums."""
     btc_df = _sample_btc_df()
 
-    class BadWeightsStrategy:
-        def compute_weights(
+    class BadWeightsStrategy(BaseStrategy):
+        strategy_id = "bad-weights"
+        version = "1.0.0"
+
+        def build_target_profile(
             self,
+            ctx: StrategyContext,
             features_df: pd.DataFrame,
-            start_date: pd.Timestamp,
-            end_date: pd.Timestamp,
-            current_date: pd.Timestamp,
-        ) -> pd.Series:
-            del features_df, current_date
-            idx = pd.date_range(start_date, end_date, freq="D")
-            # Deliberately invalid: sum > 1 and includes negative weights.
-            arr = np.full(len(idx), 2.0 / max(len(idx), 1))
-            arr[0] = -0.1
-            return pd.Series(arr, index=idx)
+            signals: dict[str, pd.Series],
+        ) -> TargetProfile:
+            del ctx, signals
+            return TargetProfile(
+                values=pd.Series(np.nan, index=features_df.index),
+                mode="preference",
+            )
 
     import pytest
 
-    with pytest.raises(AssertionError, match="sum to .*expected 1.0"):
-        validate_strategy(
-            BadWeightsStrategy(),
+    with pytest.raises(ValueError, match="target profile must contain finite numeric values"):
+        BadWeightsStrategy().validate(
+            ValidationConfig(
+                start_date="2022-01-01",
+                end_date="2023-05-01",
+                min_win_rate=0.0,
+            ),
             btc_df=btc_df,
-            start_date="2022-01-01",
-            end_date="2023-05-01",
-            min_win_rate=0.0,
         )
 
 
@@ -171,34 +175,35 @@ def test_validate_strategy_fails_forward_leakage_for_peeking_strategy():
     """Validation should detect a strategy that peeks beyond window end."""
     btc_df = _sample_btc_df()
 
-    class LeakyStrategy:
-        def compute_weights(
+    class LeakyStrategy(BaseStrategy):
+        strategy_id = "leaky"
+        version = "1.0.0"
+
+        def build_target_profile(
             self,
+            ctx: StrategyContext,
             features_df: pd.DataFrame,
-            start_date: pd.Timestamp,
-            end_date: pd.Timestamp,
-            current_date: pd.Timestamp,
+            signals: dict[str, pd.Series],
         ) -> pd.Series:
-            del current_date
-            idx = pd.date_range(start_date, end_date, freq="D")
-            weights = np.full(len(idx), 1.0 / len(idx))
-            lookahead_date = pd.Timestamp(end_date) + pd.Timedelta(days=1)
+            del signals
+            idx = features_df.index
+            preference = pd.Series(0.0, index=idx)
+            lookahead_date = pd.Timestamp(ctx.end_date) + pd.Timedelta(days=1)
             future_signal = 0.0
-            if lookahead_date in features_df.index:
-                future_signal = float(features_df.loc[lookahead_date, "price_vs_ma"])
+            if lookahead_date in ctx.features_df.index:
+                future_signal = float(ctx.features_df.loc[lookahead_date, "price_vs_ma"])
                 if np.isnan(future_signal):
                     future_signal = 0.0
-            # Inject future dependency into the final day, then renormalize.
-            weights[-1] = max(weights[-1] + 0.1 * future_signal, 1e-6)
-            weights = weights / weights.sum()
-            return pd.Series(weights, index=idx)
+            preference.iloc[-1] = future_signal
+            return preference
 
-    result = validate_strategy(
-        LeakyStrategy(),
+    result = LeakyStrategy().validate(
+        ValidationConfig(
+            start_date="2022-01-01",
+            end_date="2023-05-01",
+            min_win_rate=0.0,
+        ),
         btc_df=btc_df,
-        start_date="2022-01-01",
-        end_date="2023-05-01",
-        min_win_rate=0.0,
     )
     assert result.forward_leakage_ok is False
     assert result.passed is False
@@ -216,10 +221,12 @@ def test_example_strategies_return_valid_weight_vectors():
 
     for strategy in (UniformStrategy(), SimpleZScoreStrategy(), MomentumStrategy()):
         weights = strategy.compute_weights(
-            features_df=features_df,
-            start_date=start_date,
-            end_date=end_date,
-            current_date=end_date,
+            StrategyContext(
+                features_df=features_df,
+                start_date=start_date,
+                end_date=end_date,
+                current_date=end_date,
+            )
         )
         assert not weights.empty
         assert bool((weights >= 0).all())

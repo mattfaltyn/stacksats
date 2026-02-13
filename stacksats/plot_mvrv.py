@@ -15,16 +15,18 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from . import matplotlib_setup  # noqa: F401
+from .matplotlib_setup import configure_matplotlib_env
 
-import matplotlib
+configure_matplotlib_env()
+
+import matplotlib  # noqa: E402
 matplotlib.use("Agg")
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
+import matplotlib.dates as mdates  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
+import seaborn as sns  # noqa: E402
 
-from .btc_api.coinmetrics_btc_csv import fetch_coinmetrics_btc_csv
+from .btc_api.coinmetrics_btc_csv import fetch_coinmetrics_btc_csv  # noqa: E402
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",

@@ -1,10 +1,7 @@
-import argparse
 import json
 import logging
 import os
 from datetime import datetime
-
-from . import matplotlib_setup  # noqa: F401
 
 import matplotlib
 matplotlib.use("Agg")
@@ -13,26 +10,23 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from .api import run_backtest
-from .loader import load_strategy
-from .model_development import compute_window_weights, precompute_features
-from .prelude import check_strategy_submission_ready, load_data, parse_window_dates
-from .strategies.mvrv import MVRVStrategy
-
-# Set seaborn style for all plots
-sns.set_style("whitegrid")
-sns.set_palette("husl")
-plt.rcParams["figure.dpi"] = 100
-plt.rcParams["savefig.dpi"] = 300
+from .model_development import compute_window_weights
+from .prelude import parse_window_dates
 
 # Global variable to store precomputed features (Modal-aligned)
 _FEATURES_DF = None
 
 
+def _configure_plot_style() -> None:
+    sns.set_style("whitegrid")
+    sns.set_palette("husl")
+    plt.rcParams["figure.dpi"] = 100
+    plt.rcParams["savefig.dpi"] = 300
+
+
 def compute_weights_modal(df_window: pd.DataFrame) -> pd.Series:
     """Wrapper using compute_window_weights for validation.
 
-    Matches the interface expected by check_strategy_submission_ready().
     Uses precomputed features stored in _FEATURES_DF.
 
     For backtesting historical data, current_date is set to end_date since
@@ -372,59 +366,3 @@ def export_metrics_json(
         json.dump(json_data, f, indent=2)
 
     logging.info(f"✓ Saved: {output_path}")
-
-
-def main() -> None:
-    global _FEATURES_DF
-
-    parser = argparse.ArgumentParser(description="Run StackSats rolling-window backtest.")
-    parser.add_argument("--start-date", type=str, default=None, help="YYYY-MM-DD")
-    parser.add_argument("--end-date", type=str, default=None, help="YYYY-MM-DD")
-    parser.add_argument("--output-dir", type=str, default="output", help="Output directory")
-    parser.add_argument(
-        "--strategy",
-        type=str,
-        default=None,
-        help="Custom strategy spec in 'module_or_path:ClassName' format",
-    )
-    parser.add_argument(
-        "--strategy-label",
-        type=str,
-        default=None,
-        help="Optional strategy label for reports",
-    )
-    args = parser.parse_args()
-
-    logging.info("Starting Bitcoin DCA Strategy Analysis")
-
-    if args.strategy:
-        strategy = load_strategy(args.strategy)
-        strategy_label = args.strategy_label or args.strategy
-        btc_df = None
-    else:
-        strategy = MVRVStrategy()
-        strategy_label = args.strategy_label or "Dynamic DCA"
-        btc_df = load_data()
-
-        # Keep the existing submission-readiness check for the built-in strategy.
-        logging.info("Precomputing features for submission checks...")
-        _FEATURES_DF = precompute_features(btc_df)
-        logging.info("Running strategy submission checks...")
-        check_strategy_submission_ready(btc_df, compute_weights_modal)
-
-    result = run_backtest(
-        strategy,
-        btc_df=btc_df,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        strategy_label=strategy_label,
-    )
-
-    print(result.summary())
-    result.plot(output_dir=args.output_dir)
-    result.to_json(os.path.join(args.output_dir, "backtest_result.json"))
-    logging.info(f"All outputs saved to '{args.output_dir}/' directory")
-
-
-if __name__ == "__main__":
-    main()

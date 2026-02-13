@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import importlib
 import importlib.util
+import json
+import inspect
 from pathlib import Path
 
-from .strategies.base import WindowStrategy
+from .strategy_types import BaseStrategy
 
 
 def _load_module(module_or_path: str):
@@ -30,7 +32,12 @@ def _load_module(module_or_path: str):
     return importlib.import_module(module_or_path)
 
 
-def load_strategy(spec: str) -> WindowStrategy:
+def load_strategy(
+    spec: str,
+    *,
+    config: dict | None = None,
+    config_path: str | None = None,
+) -> BaseStrategy:
     """Load and instantiate a strategy from `module_or_path:ClassName`.
 
     Examples:
@@ -51,10 +58,56 @@ def load_strategy(spec: str) -> WindowStrategy:
             f"Class '{class_name}' not found in '{module_or_path}'."
         ) from exc
 
-    strategy = strategy_cls()
-    compute_weights = getattr(strategy, "compute_weights", None)
-    if not callable(compute_weights):
+    merged_config = dict(config or {})
+    if config_path is not None:
+        cfg_path = Path(config_path).expanduser().resolve()
+        merged_config.update(json.loads(cfg_path.read_text(encoding="utf-8")))
+
+    strategy = strategy_cls(**merged_config)
+    if not isinstance(strategy, BaseStrategy):
+        base_name = f"{BaseStrategy.__module__}.{BaseStrategy.__name__}"
         raise TypeError(
-            f"Strategy '{class_name}' must define a callable compute_weights method."
+            f"Strategy '{class_name}' must subclass {base_name}."
+        )
+    if "compute_weights" in strategy_cls.__dict__:
+        raise TypeError(
+            "Custom compute_weights overrides are not allowed. "
+            "Implement propose_weight(state) or "
+            "build_target_profile(ctx, features_df, signals) instead."
+        )
+    has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
+    has_profile_hook = (
+        strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
+    )
+    if not (has_propose_hook or has_profile_hook):
+        raise TypeError(
+            "Strategy must implement propose_weight(state) or "
+            "build_target_profile(ctx, features_df, signals)."
+        )
+    if has_propose_hook:
+        propose_weight = getattr(strategy, "propose_weight", None)
+        if not callable(propose_weight):
+            raise TypeError(f"Strategy '{class_name}' must define callable propose_weight.")
+        signature = inspect.signature(propose_weight)
+        if list(signature.parameters.keys()) != ["state"]:
+            raise TypeError(
+                "propose_weight must use signature: "
+                "propose_weight(self, state)"
+            )
+    if has_profile_hook:
+        build_target_profile = getattr(strategy, "build_target_profile", None)
+        if not callable(build_target_profile):
+            raise TypeError(
+                f"Strategy '{class_name}' must define callable build_target_profile."
+            )
+        signature = inspect.signature(build_target_profile)
+        if list(signature.parameters.keys()) != ["ctx", "features_df", "signals"]:
+            raise TypeError(
+                "build_target_profile must use signature: "
+                "build_target_profile(self, ctx, features_df, signals)"
+            )
+    if not getattr(strategy, "strategy_id", None):
+        raise ValueError(
+            f"Strategy '{class_name}' must define non-empty strategy_id metadata."
         )
     return strategy

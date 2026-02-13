@@ -44,7 +44,7 @@ MVRV_VOLATILITY_DAMPENING = (
     0.2  # How much to dampen signals in high volatility (reduced)
 )
 
-# Feature column names (for compatibility)
+# Feature column names used by model computations
 FEATS = [
     "price_vs_ma",
     "mvrv_zscore",
@@ -430,6 +430,48 @@ def allocate_sequential_stable(
     return w
 
 
+def allocate_from_proposals(
+    proposals: np.ndarray,
+    n_past: int,
+    n_total: int,
+    locked_weights: np.ndarray | None = None,
+) -> np.ndarray:
+    """Allocate final weights from user-proposed per-day values.
+
+    Past/current proposals are clipped into feasible bounds and locked.
+    Future days receive uniform allocation of the remaining budget.
+    """
+    if n_total == 0:
+        return np.array([], dtype=float)
+    if n_past <= 0:
+        return np.full(n_total, 1.0 / n_total, dtype=float)
+
+    n_past = min(n_past, n_total)
+    w = np.zeros(n_total, dtype=float)
+
+    if locked_weights is not None and len(locked_weights) >= n_past:
+        for i in range(n_past):
+            remaining_budget = max(1.0 - float(w[:i].sum()), 0.0)
+            locked = float(locked_weights[i])
+            if not np.isfinite(locked):
+                locked = 0.0
+            w[i] = float(np.clip(locked, 0.0, remaining_budget))
+    else:
+        for i in range(n_past):
+            remaining_budget = max(1.0 - float(w[:i].sum()), 0.0)
+            proposed = float(proposals[i]) if i < len(proposals) else 0.0
+            if not np.isfinite(proposed):
+                proposed = 0.0
+            w[i] = float(np.clip(proposed, 0.0, remaining_budget))
+
+    n_future = n_total - n_past
+    remaining_after_past = max(1.0 - float(w[:n_past].sum()), 0.0)
+    if n_future > 1:
+        w[n_past : n_total - 1] = remaining_after_past / n_future
+    w[n_total - 1] = max(1.0 - float(w[: n_total - 1].sum()), 0.0)
+    return w
+
+
 # =============================================================================
 # Dynamic Multiplier
 # =============================================================================
@@ -690,41 +732,27 @@ def _clean_array(arr: np.ndarray) -> np.ndarray:
     return np.where(np.isfinite(arr), arr, 0)
 
 
-def compute_weights_fast(
+def compute_preference_scores(
     features_df: pd.DataFrame,
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
-    n_past: int | None = None,
-    locked_weights: np.ndarray | None = None,
 ) -> pd.Series:
-    """Compute weights for a date window using precomputed features.
+    """Compute daily preference scores from model features.
 
-    Args:
-        features_df: DataFrame from precompute_features()
-        start_date: Window start
-        end_date: Window end
-        n_past: Number of past days (for stable allocation)
-        locked_weights: Optional locked weights from database
-
-    Returns:
-        Series of weights indexed by date
+    Preference scores are framework-internal logits; higher means more preferred.
     """
     df = features_df.loc[start_date:end_date]
     if df.empty:
         return pd.Series(dtype=float)
-
-    n = len(df)
-    base = np.ones(n) / n
 
     # Extract and clean features
     price_vs_ma = _clean_array(df["price_vs_ma"].values)
     mvrv_zscore = _clean_array(df["mvrv_zscore"].values)
     mvrv_gradient = _clean_array(df["mvrv_gradient"].values)
 
-    # Extract new features if available
+    # Optional features
     if "mvrv_percentile" in df.columns:
         mvrv_percentile = _clean_array(df["mvrv_percentile"].values)
-        # Replace 0 with 0.5 (neutral) for cleaner defaults
         mvrv_percentile = np.where(mvrv_percentile == 0, 0.5, mvrv_percentile)
     else:
         mvrv_percentile = None
@@ -746,8 +774,7 @@ def compute_weights_fast(
     else:
         signal_confidence = None
 
-    # Compute dynamic weights with enhanced features
-    dyn = compute_dynamic_multiplier(
+    multiplier = compute_dynamic_multiplier(
         price_vs_ma,
         mvrv_zscore,
         mvrv_gradient,
@@ -756,7 +783,112 @@ def compute_weights_fast(
         mvrv_volatility,
         signal_confidence,
     )
-    raw = base * dyn
+    safe_multiplier = np.clip(multiplier, 1e-12, None)
+    preference = np.log(safe_multiplier)
+    return pd.Series(preference, index=df.index, dtype=float)
+
+
+def compute_weights_from_target_profile(
+    *,
+    features_df: pd.DataFrame,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    current_date: pd.Timestamp,
+    target_profile: pd.Series,
+    mode: str = "preference",
+    locked_weights: np.ndarray | None = None,
+    n_past: int | None = None,
+) -> pd.Series:
+    """Convert a target profile into final iterative stable allocation weights."""
+    full_range = pd.date_range(start=start_date, end=end_date, freq="D")
+    if len(full_range) == 0:
+        return pd.Series(dtype=float)
+
+    target = target_profile.reindex(full_range)
+    target = pd.to_numeric(target, errors="coerce")
+
+    n = len(full_range)
+    base = np.ones(n, dtype=float) / n
+    if mode == "absolute":
+        absolute = target.fillna(0.0).to_numpy(dtype=float)
+        absolute = np.where(np.isfinite(absolute), absolute, 0.0)
+        absolute = np.clip(absolute, 0.0, None)
+        if absolute.sum() <= 0:
+            raw = base
+        else:
+            raw = absolute / absolute.sum()
+    elif mode == "preference":
+        preference = target.fillna(0.0).to_numpy(dtype=float)
+        preference = np.where(np.isfinite(preference), preference, 0.0)
+        preference = np.clip(preference, -50, 50)
+        raw = base * np.exp(preference)
+    else:
+        raise ValueError(f"Unsupported target profile mode '{mode}'.")
+
+    if n_past is None:
+        past_end = min(current_date, end_date)
+        if start_date <= past_end:
+            n_past = len(pd.date_range(start=start_date, end=past_end, freq="D"))
+        else:
+            n_past = 0
+    weights = allocate_sequential_stable(raw, n_past, locked_weights)
+    return pd.Series(weights, index=full_range, dtype=float)
+
+
+def compute_weights_from_proposals(
+    *,
+    proposals: pd.Series,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    n_past: int,
+    locked_weights: np.ndarray | None = None,
+) -> pd.Series:
+    """Convert per-day user proposals into final framework weights."""
+    full_range = pd.date_range(start=start_date, end=end_date, freq="D")
+    if len(full_range) == 0:
+        return pd.Series(dtype=float)
+
+    proposed = pd.to_numeric(proposals.reindex(full_range), errors="coerce")
+    proposed_arr = proposed.fillna(0.0).to_numpy(dtype=float)
+    weights = allocate_from_proposals(
+        proposals=proposed_arr,
+        n_past=n_past,
+        n_total=len(full_range),
+        locked_weights=locked_weights,
+    )
+    return pd.Series(weights, index=full_range, dtype=float)
+
+
+def compute_weights_fast(
+    features_df: pd.DataFrame,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    n_past: int | None = None,
+    locked_weights: np.ndarray | None = None,
+) -> pd.Series:
+    """Compute weights for a date window using precomputed features.
+
+    Internal helper retained for low-level model experiments.
+    Canonical strategy execution is hook-driven:
+    `propose_weight`/`build_target_profile` -> framework allocation kernel.
+
+    Args:
+        features_df: DataFrame from precompute_features()
+        start_date: Window start
+        end_date: Window end
+        n_past: Number of past days (for stable allocation)
+        locked_weights: Optional locked weights from database
+
+    Returns:
+        Series of weights indexed by date
+    """
+    df = features_df.loc[start_date:end_date]
+    if df.empty:
+        return pd.Series(dtype=float)
+
+    n = len(df)
+    preference = compute_preference_scores(features_df, start_date, end_date)
+    raw = (np.ones(n, dtype=float) / n) * np.exp(np.clip(preference.to_numpy(), -50, 50))
 
     # Allocate with stability
     if n_past is None:
@@ -789,34 +921,18 @@ def compute_window_weights(
     Returns:
         Series of weights summing to 1.0
     """
-    full_range = pd.date_range(start=start_date, end=end_date, freq="D")
-
-    # Extend features for future dates
-    missing = full_range.difference(features_df.index)
-    if len(missing) > 0:
-        placeholder = pd.DataFrame(
-            {col: 0.0 for col in features_df.columns},
-            index=missing,
-        )
-        # Set appropriate defaults for new features
-        if "mvrv_percentile" in placeholder.columns:
-            placeholder["mvrv_percentile"] = 0.5
-        if "mvrv_zone" in placeholder.columns:
-            placeholder["mvrv_zone"] = 0
-        if "mvrv_volatility" in placeholder.columns:
-            placeholder["mvrv_volatility"] = 0.5
-        if "signal_confidence" in placeholder.columns:
-            placeholder["signal_confidence"] = 0.5
-        features_df = pd.concat([features_df, placeholder]).sort_index()
-
-    # Determine past/future split
-    past_end = min(current_date, end_date)
-    if start_date <= past_end:
-        n_past = len(pd.date_range(start=start_date, end=past_end, freq="D"))
-    else:
-        n_past = 0
-
-    weights = compute_weights_fast(
-        features_df, start_date, end_date, n_past, locked_weights
+    preference = compute_preference_scores(
+        features_df=features_df,
+        start_date=start_date,
+        end_date=end_date,
     )
-    return weights.reindex(full_range, fill_value=0.0)
+    weights = compute_weights_from_target_profile(
+        features_df=features_df,
+        start_date=start_date,
+        end_date=end_date,
+        current_date=current_date,
+        target_profile=preference,
+        mode="preference",
+        locked_weights=locked_weights,
+    )
+    return weights

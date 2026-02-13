@@ -48,7 +48,3 @@ def configure_matplotlib_env() -> None:
     if not current_mpl or not _is_writable_dir(Path(current_mpl)):
         os.environ["MPLCONFIGDIR"] = str(mpl_config)
 
-
-# Configure eagerly on import so callers can simply import this module
-# before importing matplotlib without introducing E402 lint issues.
-configure_matplotlib_env()

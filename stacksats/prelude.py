@@ -9,22 +9,8 @@ import requests
 from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
 from .model_development import precompute_features
 
-try:
-    from IPython.display import display
-except ImportError:
-    display = print
-
-logging.basicConfig(
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
 # Configuration
-YESTERDAY = (pd.Timestamp.now().normalize() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 BACKTEST_START = "2018-01-01"
-BACKTEST_END = YESTERDAY
-INVESTMENT_WINDOW = 12  # months (deprecated: use WINDOW_OFFSET for consistency)
 PURCHASE_FREQ = "Daily"  # Daily frequency for DCA purchases
 # Standard 1-year window used across all modules (backtest.py, export_weights.py)
 WINDOW_OFFSET = pd.DateOffset(years=1)
@@ -33,6 +19,15 @@ PURCHASE_FREQ_TO_OFFSET = {"Daily": "1D"}
 
 # Tolerance for weight sum validation (small leniency for floating-point precision)
 WEIGHT_SUM_TOLERANCE = 1e-5
+
+
+def get_backtest_end() -> str:
+    """Return dynamic default end date as yesterday (UTC-localized date)."""
+    return (pd.Timestamp.now().normalize() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+# Backward-compatible constant for callers/tests that import this symbol directly.
+BACKTEST_END = get_backtest_end()
 
 
 def _is_cache_usable(csv_bytes: bytes, backtest_start: pd.Timestamp, today: pd.Timestamp) -> bool:
@@ -123,7 +118,7 @@ def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: in
     if "PriceUSD" not in df.columns:
         raise ValueError("PriceUSD column not found in CoinMetrics data")
 
-    # Rename PriceUSD to PriceUSD_coinmetrics for compatibility
+    # Normalize to the canonical internal price column name
     PRICE_COL = "PriceUSD_coinmetrics"
     df[PRICE_COL] = df["PriceUSD"]
 
@@ -319,7 +314,7 @@ def compute_cycle_spd(
         DataFrame with SPD statistics indexed by window label
     """
     start = start_date or BACKTEST_START
-    end = end_date or BACKTEST_END
+    end = end_date or get_backtest_end()
 
     # Use provided features or compute them
     if features_df is None:
@@ -382,10 +377,12 @@ def compute_cycle_spd(
         # Validate weights sum to 1.0 if requested
         if validate_weights:
             weight_sum = weight_slice.sum()
-            assert np.isclose(weight_sum, 1.0, atol=WEIGHT_SUM_TOLERANCE), (
-                f"Weights for range {window_start.date()} to {window_end.date()} "
-                f"sum to {weight_sum:.10f}, expected 1.0 (tolerance: {WEIGHT_SUM_TOLERANCE})"
-            )
+            if not np.isclose(weight_sum, 1.0, atol=WEIGHT_SUM_TOLERANCE):
+                raise ValueError(
+                    f"Weights for range {window_start.date()} to {window_end.date()} "
+                    f"sum to {weight_sum:.10f}, expected 1.0 "
+                    f"(tolerance: {WEIGHT_SUM_TOLERANCE})"
+                )
             validated_windows += 1
 
         inv_price = 1e8 / price_slice  # sats per dollar
@@ -444,7 +441,7 @@ def backtest_dynamic_dca(
         features_df: Optional precomputed features. If None, computes them internally.
         strategy_label: Label for logging (default: "strategy")
         start_date: Optional start date (default: BACKTEST_START)
-        end_date: Optional end date (default: BACKTEST_END)
+        end_date: Optional end date (default: dynamic yesterday)
 
     Returns:
         Tuple of (SPD table DataFrame, exponential-decay average percentile)
@@ -479,83 +476,3 @@ def backtest_dynamic_dca(
     return spd_table, exp_avg_pct
 
 
-def check_strategy_submission_ready(dataframe: pd.DataFrame, strategy_function) -> None:
-    """Validate strategy: no future data, valid weights, ≥50% win rate vs uniform DCA."""
-    print("Validating strategy submission readiness...")
-    passed = True
-
-    # Forward-leakage test
-    backtest_df = dataframe.loc[BACKTEST_START:BACKTEST_END]
-    full_weights = strategy_function(dataframe).reindex(backtest_df.index).fillna(0.0)
-
-    for probe in backtest_df.index[:: max(len(backtest_df) // 50, 1)]:
-        masked = dataframe.copy()
-        masked.loc[masked.index > probe, :] = np.nan
-        masked_wt = strategy_function(masked).reindex(full_weights.index).fillna(0.0)
-
-        if not np.isclose(
-            masked_wt.loc[probe], full_weights.loc[probe], rtol=1e-9, atol=1e-12
-        ):
-            print(
-                f"[{probe.date()}] ❌ Forward-leakage detected (Δ={abs(masked_wt.loc[probe] - full_weights.loc[probe]):.2e})"
-            )
-            passed = False
-            break
-
-    # Weight validation per rolling window (using 1-year windows)
-    window_offset = WINDOW_OFFSET
-    for start in pd.date_range(
-        pd.to_datetime(BACKTEST_START),
-        pd.to_datetime(BACKTEST_END) - window_offset,
-        freq=PURCHASE_FREQ_TO_OFFSET[PURCHASE_FREQ],
-    ):
-        end = start + window_offset
-        label = _make_window_label(start, end)
-        w_slice = strategy_function(dataframe.loc[start:end])
-
-        if (w_slice < 0).any():
-            print(f"[{label}] ❌ Negative weights detected.")
-            passed = False
-
-        total = w_slice.sum()
-        if not np.isclose(total, 1.0, rtol=1e-5, atol=1e-8):
-            print(
-                f"[{label}] ❌ Sum-to-1 check failed: {total:.4f} (weights must sum to 1.0)"
-            )
-            passed = False
-
-    # Performance vs uniform DCA
-    spd_table = compute_cycle_spd(dataframe, strategy_function)
-    underperf = spd_table[
-        spd_table["dynamic_percentile"] < spd_table["uniform_percentile"]
-    ]
-
-    if not underperf.empty:
-        print("\n⚠️ Windows where strategy underperformed Uniform DCA:")
-        display(
-            underperf[["dynamic_percentile", "uniform_percentile"]].assign(
-                Delta=lambda x: x["dynamic_percentile"] - x["uniform_percentile"]
-            )
-        )
-
-    win_rate = 1 - len(underperf) / len(spd_table)
-    print(
-        f"\nSummary: {len(underperf)}/{len(spd_table)} underperformed ({100 * win_rate:.2f}% win rate)"
-    )
-
-    if win_rate >= 0.5:
-        print(
-            "✅ Strategy meets performance requirement (≥ 50% win rate vs. uniform DCA)."
-        )
-    else:
-        print(
-            "❌ Strategy failed performance requirement (< 50% win rate vs. uniform DCA)."
-        )
-        passed = False
-
-    print()
-    print(
-        "✅ Strategy is ready for submission."
-        if passed
-        else "⚠️ Please address the above issues before submitting."
-    )

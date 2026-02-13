@@ -10,7 +10,6 @@ Weight computation strategy:
 - Each day the modal app runs, future uniform weights are recalculated
 """
 
-import argparse
 import os
 
 import pandas as pd
@@ -22,13 +21,9 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
     execute_values = None
 
 from .btc_price_fetcher import fetch_btc_price_robust
-from .loader import load_strategy
-from .model_development import compute_window_weights, precompute_features
-from .prelude import (
-    generate_date_ranges,
-    group_ranges_by_start_date,
-    load_data,
-)
+from .model_development import compute_window_weights
+from .prelude import generate_date_ranges, group_ranges_by_start_date
+from .strategy_types import BaseStrategy, StrategyContext
 
 # Load environment variables from .env file
 try:
@@ -91,11 +86,15 @@ def process_start_date_batch(
         if strategy is None:
             weights = compute_window_weights(features_df, start_date, end_date, current_date)
         else:
+            if not isinstance(strategy, BaseStrategy):
+                raise TypeError("strategy must subclass BaseStrategy.")
             weights = strategy.compute_weights(
-                features_df=features_df,
-                start_date=start_date,
-                end_date=end_date,
-                current_date=current_date,
+                StrategyContext(
+                    features_df=features_df,
+                    start_date=start_date,
+                    end_date=end_date,
+                    current_date=current_date,
+                )
             )
 
         # Get prices: past prices are known, future prices are NaN
@@ -618,131 +617,3 @@ def update_today_weights(conn, df, today_str):
     return total_updated
 
 
-def main():
-    """Main function for local execution."""
-    parser = argparse.ArgumentParser(description="Export StackSats weights to database.")
-    parser.add_argument(
-        "--strategy",
-        type=str,
-        default=None,
-        help="Custom strategy spec in 'module_or_path:ClassName' format",
-    )
-    args = parser.parse_args()
-
-    strategy = load_strategy(args.strategy) if args.strategy else None
-
-    print("Loading data...")
-    btc_df = load_data()
-
-    # Determine BTC price column
-    if BTC_PRICE_COL not in btc_df.columns:
-        raise ValueError(
-            f"BTC price column '{BTC_PRICE_COL}' not found in CoinMetrics data. Available columns: {list(btc_df.columns)}"
-        )
-
-    btc_price_col = BTC_PRICE_COL
-
-    print(f"Using BTC price column: {btc_price_col}")
-    print(f"Original data shape: {btc_df.shape}")
-
-    current_date = pd.Timestamp.now().normalize()
-    today_str = current_date.strftime("%Y-%m-%d")
-    print(f"\nCurrent date: {today_str}")
-
-    # Generate and validate date ranges
-    print(f"\nGenerating all date range permutations from {RANGE_START} to {RANGE_END}")
-    print(f"Minimum range length: {MIN_RANGE_LENGTH_DAYS} days")
-
-    date_ranges = generate_date_ranges(RANGE_START, RANGE_END, MIN_RANGE_LENGTH_DAYS)
-    print(f"Generated {len(date_ranges)} date ranges")
-
-    # Precompute features (replacing the old weight cache)
-    print("Precomputing features for entire history...")
-    features_df = precompute_features(btc_df)
-    print("✓ Features precomputed")
-
-    # Group by start date for batched processing
-    grouped_ranges = group_ranges_by_start_date(date_ranges)
-    sorted_start_dates = sorted(grouped_ranges.keys())
-    print(f"Grouped into {len(sorted_start_dates)} unique start dates")
-
-    # Process all date ranges using batched start dates
-    print(
-        f"\nProcessing {len(date_ranges)} date ranges via {len(sorted_start_dates)} batches..."
-    )
-    all_results = []
-
-    for i, start_date in enumerate(sorted_start_dates, 1):
-        end_dates = grouped_ranges[start_date]
-        if i % 50 == 0 or i == len(sorted_start_dates):
-            print(
-                f"\rProcessing batch {i}/{len(sorted_start_dates)}: {start_date.date()} ({len(end_dates)} ranges)",
-                end="",
-            )
-
-        batch_result = process_start_date_batch(
-            start_date,
-            end_dates,
-            features_df,
-            btc_df,
-            current_date,
-            btc_price_col,
-            strategy=strategy,
-        )
-        all_results.append(batch_result)
-
-    print()  # New line after progress
-
-    # Combine results
-    print("\nCombining all results...")
-    final_df = pd.concat(all_results, ignore_index=True)[
-        ["id", "start_date", "end_date", "DCA_date", "btc_usd", "weight"]
-    ]
-
-    # Connect to database and handle insert/update logic
-    print("\nConnecting to database...")
-    import logging
-
-    logging.info("Connecting to database...")
-    conn = get_db_connection()
-
-    try:
-        # Create table if it doesn't exist
-        logging.info("Ensuring bitcoin_dca table exists...")
-        create_table_if_not_exists(conn)
-
-        # Check if table is empty
-        logging.info("Checking if table is empty...")
-        is_empty = table_is_empty(conn)
-
-        if is_empty:
-            # Initial run: insert all data
-            logging.info("Table is empty. Starting initial data insertion...")
-            inserted_count = insert_all_data(conn, final_df)
-            print(f"\n✓ Successfully inserted {inserted_count} rows into bitcoin_dca")
-            logging.info(
-                f"Initial data insertion completed: {inserted_count} rows inserted"
-            )
-        else:
-            # Subsequent run: update only today's weights
-            logging.info(
-                f"Table has existing data. Starting weight updates for date={today_str}..."
-            )
-            updated_count = update_today_weights(conn, final_df, today_str)
-            print(f"\n✓ Successfully updated {updated_count} rows for date={today_str}")
-            logging.info(f"Weight update completed: {updated_count} rows updated")
-
-        print(f"  Number of date ranges: {len(date_ranges)}")
-        print(
-            f"  Unique date ranges: {final_df[['start_date', 'end_date']].drop_duplicates().shape[0]}"
-        )
-        print("\nFirst few rows:")
-        print(final_df.head(10))
-        print("\nLast few rows:")
-        print(final_df.tail(10))
-    finally:
-        conn.close()
-
-
-if __name__ == "__main__":
-    main()

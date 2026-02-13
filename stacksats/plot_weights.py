@@ -14,15 +14,17 @@ import os
 import sys
 from typing import Tuple
 
-from . import matplotlib_setup  # noqa: F401
+from .matplotlib_setup import configure_matplotlib_env
 
-import matplotlib
+configure_matplotlib_env()
+
+import matplotlib  # noqa: E402
 matplotlib.use("Agg")
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
-import pandas as pd
-import psycopg2
-import seaborn as sns
+import matplotlib.dates as mdates  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
+import psycopg2  # noqa: E402
+import seaborn as sns  # noqa: E402
 
 # Load environment variables from .env file
 try:

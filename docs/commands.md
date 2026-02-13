@@ -5,6 +5,10 @@ This file explains how to run checks, backtests, exports, and deployment using t
 - `examples/model_example.py`
 - strategy class: `ExampleMVRVStrategy`
 
+Strategy implementations can use either:
+- `propose_weight(state)` for per-day intent, or
+- `build_target_profile(ctx, features_df, signals)` for batch intent.
+
 ## Prerequisites
 
 From the repo root:
@@ -56,57 +60,72 @@ python examples/model_example.py \
 ```
 
 What this does:
-- Runs `validate_strategy(...)`
-- Runs `run_backtest(...)`
+- Runs `strategy.validate(...)`
+- Runs `strategy.backtest(...)`
 - Writes plots + JSON output to `output/`
 
-## 2) Validate Strategy via Package CLI
+## 2) Validate Strategy via Strategy Lifecycle CLI
 
 Check whether the model passes package validation gates:
 
 ```bash
-stacksats-validate --strategy examples/model_example.py:ExampleMVRVStrategy
+stacksats strategy validate --strategy examples/model_example.py:ExampleMVRVStrategy
 ```
 
 Common options:
 
 ```bash
-stacksats-validate \
+stacksats strategy validate \
   --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy-config strategy_config.json \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
   --min-win-rate 50.0
 ```
 
-## 3) Run Full Backtest via Package CLI
+## 3) Run Full Backtest via Strategy Lifecycle CLI
 
 Basic:
 
 ```bash
-stacksats-backtest --strategy examples/model_example.py:ExampleMVRVStrategy
+stacksats strategy backtest --strategy examples/model_example.py:ExampleMVRVStrategy
 ```
 
 With options:
 
 ```bash
-stacksats-backtest \
+stacksats strategy backtest \
   --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy-config strategy_config.json \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
   --output-dir output \
   --strategy-label model-example
 ```
 
-## 4) Export Weights to Database
-
-Requires:
-- `DATABASE_URL` set
-- deploy extras installed
+## 4) Export Strategy Artifacts
 
 ```bash
-export DATABASE_URL="postgresql://..."
-stacksats-export --strategy examples/model_example.py:ExampleMVRVStrategy
+stacksats strategy export \
+  --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy-config strategy_config.json \
+  --start-date 2025-12-01 \
+  --end-date 2027-12-31 \
+  --output-dir output
 ```
+
+Artifacts are written under:
+
+```text
+output/<strategy_id>/<version>/<run_id>/
+```
+
+This includes:
+- `weights.csv`
+- `artifacts.json` (`strategy_id`, `version`, `config_hash`, `run_id`, file map)
+
+Notes:
+- `stacksats strategy export` is strategy artifact export (filesystem output).
 
 ## 5) Deploy to Modal
 

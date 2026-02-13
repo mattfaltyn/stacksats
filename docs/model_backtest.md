@@ -6,6 +6,9 @@ This document explains the backtesting framework in `stacksats/backtest.py` and 
 
 The backtest system validates the dynamic DCA strategy by comparing its performance against uniform DCA (equal daily allocations) across rolling 1-year investment windows from 2018-01-01 to the present.
 
+Allocation invariants and user/framework boundaries are defined in `docs/framework.md`.
+Backtesting uses the same sealed allocation kernel as production.
+
 **Key Metrics:**
 - **Win Rate**: Percentage of windows where dynamic DCA outperforms uniform DCA
 - **SPD Percentile**: Sats-per-dollar percentile within each window's min/max range
@@ -244,24 +247,16 @@ assert win_rate >= 0.5
 
 ## Usage
 
-Run the backtest from the command line:
+Run a custom strategy from the lifecycle CLI:
 
 ```bash
-cd /path/to/stacksats
-source venv/bin/activate
-stacksats-backtest
-```
-
-Run a custom strategy from a standalone file:
-
-```bash
-stacksats-backtest --strategy examples/model_example.py:ExampleMVRVStrategy
+stacksats strategy backtest --strategy examples/model_example.py:ExampleMVRVStrategy
 ```
 
 Add optional controls:
 
 ```bash
-stacksats-backtest \
+stacksats strategy backtest \
   --strategy examples/model_example.py:ExampleMVRVStrategy \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
@@ -269,47 +264,35 @@ stacksats-backtest \
   --strategy-label model-example
 ```
 
-## Public API Functions
+## Strategy API
 
-### `run_backtest(strategy, ...)`
-
-Recommended API for rolling-window SPD backtests:
+Backtest with strategy methods:
 
 ```python
-from stacksats import run_backtest
 from examples.model_example import ExampleMVRVStrategy
+from stacksats import BacktestConfig, ValidationConfig
 
-result = run_backtest(
-    ExampleMVRVStrategy(),
-    start_date="2020-01-01",
-    end_date="2025-01-01",
-    strategy_label="model-example",
+strategy = ExampleMVRVStrategy()
+
+validation = strategy.validate(
+    ValidationConfig(
+        start_date="2020-01-01",
+        end_date="2025-01-01",
+        min_win_rate=50.0,
+    )
+)
+print(validation.summary())
+
+result = strategy.backtest(
+    BacktestConfig(
+        start_date="2020-01-01",
+        end_date="2025-01-01",
+        strategy_label="model-example",
+    )
 )
 print(result.summary())
 result.plot(output_dir="output")
 result.to_json("output/backtest_result.json")
-```
-
-### `validate_strategy(strategy, ...)`
-
-Recommended API for submission-readiness checks:
-- Forward-leakage test (no future data used)
-- Weight validation (non-negative, sum to 1.0)
-- Performance check (configurable minimum win rate, default 50%)
-
-```python
-from stacksats import validate_strategy
-from examples.model_example import ExampleMVRVStrategy
-
-validation = validate_strategy(
-    ExampleMVRVStrategy(),
-    start_date="2020-01-01",
-    end_date="2025-01-01",
-    min_win_rate=50.0,
-)
-print(validation.summary())
-for message in validation.messages:
-    print("-", message)
 ```
 
 ## Performance Characteristics

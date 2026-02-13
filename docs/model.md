@@ -5,6 +5,7 @@ This document explains the ML model that computes dynamic DCA (Dollar Cost Avera
 ## Table of Contents
 
 - [Overview](#overview)
+- [Strategy Runtime Interfaces](#strategy-runtime-interfaces)
 - [Model Architecture](#model-architecture)
 - [Signal Composition](#signal-composition)
 - [Feature Construction](#feature-construction)
@@ -32,6 +33,36 @@ The model computes daily investment weights that determine how much of your DCA 
 - Past weights are **locked** once computed and never change
 - Future weights are distributed from the remaining budget
 - Weights are deterministic given the same inputs
+
+## Strategy Runtime Interfaces
+
+StackSats now treats strategy objects as first-class runtime objects:
+
+- `BaseStrategy`: strategy identity and defaults (`strategy_id`, `version`, `description`)
+- `StrategyContext`: typed BTC runtime inputs passed to strategy hooks
+- `TargetProfile`: user-defined daily preference/target series
+- `DayState`: per-day user hook input for `propose_weight(state)`
+- `BacktestConfig`, `ValidationConfig`, `ExportConfig`: explicit execution configuration
+- `StrategyRunner`: single orchestration service used by strategy methods and CLI
+
+User strategy scope:
+- `transform_features(...)`
+- `build_signals(...)`
+- `propose_weight(state)` (per-day intent), or
+- `build_target_profile(...)` (batch intent series)
+
+Framework scope:
+- target->raw conversion
+- iterative allocation (`allocate_sequential_stable`)
+- weight validation and leakage checks
+
+Canonical framework boundary and invariants are defined in `docs/framework.md`.
+
+Lifecycle artifact provenance fields:
+- `strategy_id`
+- `version`
+- `config_hash`
+- `run_id`
 
 ## Model Architecture
 
@@ -323,25 +354,6 @@ def allocate_sequential_stable(raw, n_past, locked_weights=None):
 ```
 
 ## Weight Computation Functions
-
-### compute_weights_fast
-
-Core weight computation for a date range using all enhanced features:
-
-```python
-def compute_weights_fast(
-    features_df,
-    start_date,
-    end_date,
-    n_past=None,
-    locked_weights=None,
-) -> pd.Series:
-    # Extract all features: price_vs_ma, mvrv_zscore, mvrv_gradient,
-    #   mvrv_percentile, mvrv_acceleration, mvrv_volatility, signal_confidence
-    # Compute uniform base PDF
-    # Apply dynamic multiplier with all signal layers
-    # Return allocated weights
-```
 
 ### compute_window_weights
 

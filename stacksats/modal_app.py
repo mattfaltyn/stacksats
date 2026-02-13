@@ -144,7 +144,6 @@ def process_start_date_batch_modal(args_tuple):
     from .export_weights import process_start_date_batch
     from .loader import load_strategy
 
-    # Unpack arguments (supports legacy 6-item tuple without strategy_spec)
     if len(args_tuple) == 7:
         (
             start_date_str,

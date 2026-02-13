@@ -21,7 +21,7 @@ List other approaches and trade-offs.
 ## Scope and impact
 
 - Affected modules/files:
-- Backward compatibility considerations:
+- Migration/rollout considerations:
 - Docs updates needed:
 - Test coverage needed:
 

@@ -1,1 +1,1 @@
-"""BTC API source adapters."""
+"""BTC API source integrations."""
