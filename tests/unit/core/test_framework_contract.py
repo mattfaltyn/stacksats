@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import stacksats.framework_contract as framework_contract
 from stacksats.framework_contract import (
     apply_clipped_weight,
     assert_final_invariants,
@@ -77,6 +78,37 @@ def test_apply_clipped_weight_clamps_negative_remaining_budget() -> None:
 
     assert clipped == 0.0
     assert remaining == 0.0
+
+
+def test_apply_clipped_weight_raises_when_enforced_bounds_are_infeasible() -> None:
+    with pytest.raises(ValueError, match="No feasible allocation bounds"):
+        apply_clipped_weight(
+            proposed_weight=0.0,
+            remaining_budget=0.0,
+            remaining_days_including_today=2,
+            enforce_contract_bounds=True,
+        )
+
+
+def test_load_allocation_span_days_rejects_non_integer_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("STACKSATS_ALLOCATION_SPAN_DAYS", "not-an-int")
+
+    with pytest.raises(ValueError, match="must be an integer"):
+        framework_contract._load_allocation_span_days()
+
+
+def test_load_allocation_span_days_rejects_out_of_range_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "STACKSATS_ALLOCATION_SPAN_DAYS",
+        str(framework_contract.MIN_SPAN_DAYS - 1),
+    )
+
+    with pytest.raises(ValueError, match="Allocation span must be between"):
+        framework_contract._load_allocation_span_days()
 
 
 def test_assert_final_invariants_rejects_non_1d() -> None:

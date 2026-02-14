@@ -241,8 +241,10 @@ class StrategyRunner:
         shuffled_win_rates: list[float] = []
         for seed in range(int(config.shuffled_trials)):
             shuffled_df = btc_df.copy(deep=True)
-            window_values = shuffled_df.loc[start_ts:end_ts, "PriceUSD_coinmetrics"].to_numpy(
-                dtype=float
+            window_values = np.array(
+                shuffled_df.loc[start_ts:end_ts, "PriceUSD_coinmetrics"].to_numpy(dtype=float),
+                dtype=float,
+                copy=True,
             )
             if window_values.size == 0:
                 messages.append("Strict shuffled check skipped: empty validation window.")

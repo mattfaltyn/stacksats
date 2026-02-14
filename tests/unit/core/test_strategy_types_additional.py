@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 from stacksats.strategy_types import BaseStrategy, StrategyContext
 
 
@@ -135,6 +136,36 @@ def test_validate_weights_rejects_sum_mismatch() -> None:
 
     with pytest.raises(ValueError, match="must sum to 1.0"):
         strategy.validate_weights(weights, ctx)
+
+
+def test_validate_weights_rejects_values_below_contract_min() -> None:
+    strategy = _SimpleProposeStrategy()
+    ctx = _context()
+    idx = pd.date_range("2024-01-01", periods=ALLOCATION_SPAN_DAYS, freq="D")
+
+    base = 1.0 / ALLOCATION_SPAN_DAYS
+    weights = np.full(ALLOCATION_SPAN_DAYS, base, dtype=float)
+    weights[0] = MIN_DAILY_WEIGHT / 10.0
+    deficit = base - weights[0]
+    weights[1:] += deficit / (ALLOCATION_SPAN_DAYS - 1)
+
+    with pytest.raises(ValueError, match="must be >="):
+        strategy.validate_weights(pd.Series(weights, index=idx), ctx)
+
+
+def test_validate_weights_rejects_values_above_contract_max() -> None:
+    strategy = _SimpleProposeStrategy()
+    ctx = _context()
+    idx = pd.date_range("2024-01-01", periods=ALLOCATION_SPAN_DAYS, freq="D")
+
+    base = 1.0 / ALLOCATION_SPAN_DAYS
+    weights = np.full(ALLOCATION_SPAN_DAYS, base, dtype=float)
+    weights[0] = MAX_DAILY_WEIGHT + 1e-3
+    excess = weights[0] - base
+    weights[1:] -= excess / (ALLOCATION_SPAN_DAYS - 1)
+
+    with pytest.raises(ValueError, match="must be <="):
+        strategy.validate_weights(pd.Series(weights, index=idx), ctx)
 
 
 def test_default_config_methods_include_strategy_metadata() -> None:

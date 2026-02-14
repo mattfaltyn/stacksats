@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import stacksats.prelude as prelude_module
 from stacksats.model_development import (
     allocate_from_proposals,
     compute_preference_scores,
@@ -159,6 +160,82 @@ def test_compute_cycle_spd_raises_when_weight_validation_fails(
             end_date="2025-01-01",
             validate_weights=True,
         )
+
+
+def test_compute_cycle_spd_computes_features_when_none_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    btc_df, _ = _single_window_data()
+    calls = {"count": 0}
+
+    def _fake_precompute_features(df: pd.DataFrame) -> pd.DataFrame:
+        calls["count"] += 1
+        return pd.DataFrame({"PriceUSD_coinmetrics": df["PriceUSD_coinmetrics"]}, index=df.index)
+
+    monkeypatch.setattr("stacksats.prelude.precompute_features", _fake_precompute_features)
+
+    result = compute_cycle_spd(
+        btc_df,
+        strategy_function=lambda window: pd.Series(
+            np.full(len(window), 1.0 / len(window), dtype=float),
+            index=window.index,
+        ),
+        features_df=None,
+        start_date="2024-01-01",
+        end_date="2025-01-01",
+        validate_weights=True,
+    )
+
+    assert calls["count"] == 1
+    assert len(result) >= 1
+
+
+def test_compute_cycle_spd_skips_window_when_window_end_exceeds_requested_end(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    start_ts = pd.Timestamp("2024-01-01")
+    end_ts = start_ts + prelude_module.WINDOW_OFFSET + pd.Timedelta(days=2)
+    full_idx = pd.date_range(start_ts, end_ts + pd.Timedelta(days=2), freq="D")
+    btc_df = pd.DataFrame(
+        {"PriceUSD_coinmetrics": np.linspace(30000.0, 50000.0, len(full_idx))},
+        index=full_idx,
+    )
+    features_df = pd.DataFrame({"PriceUSD_coinmetrics": btc_df["PriceUSD_coinmetrics"]}, index=full_idx)
+
+    real_date_range = prelude_module.pd.date_range
+    max_start_date = end_ts - prelude_module.WINDOW_OFFSET
+
+    def _fake_date_range(*args, **kwargs):
+        if (
+            kwargs.get("freq") == "D"
+            and kwargs.get("start") == start_ts
+            and kwargs.get("end") == max_start_date
+        ):
+            return pd.DatetimeIndex([start_ts, max_start_date + pd.Timedelta(days=1)])
+        return real_date_range(*args, **kwargs)
+
+    monkeypatch.setattr("stacksats.prelude.pd.date_range", _fake_date_range)
+
+    calls = {"count": 0}
+
+    def _strategy(window: pd.DataFrame) -> pd.Series:
+        calls["count"] += 1
+        return pd.Series(
+            np.full(len(window), 1.0 / len(window), dtype=float),
+            index=window.index,
+        )
+
+    result = compute_cycle_spd(
+        btc_df,
+        strategy_function=_strategy,
+        features_df=features_df,
+        start_date=start_ts.strftime("%Y-%m-%d"),
+        end_date=end_ts.strftime("%Y-%m-%d"),
+        validate_weights=True,
+    )
+
+    assert calls["count"] == 1
+    assert len(result) == 1
 
 
 def test_allocate_from_proposals_returns_empty_when_total_is_zero() -> None:
