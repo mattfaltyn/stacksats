@@ -135,7 +135,7 @@ In PyPI project settings, add a Trusted Publisher with:
 
 Use this sequence after workflows are merged:
 
-1. Open a PR with a version bump and verify `package-check.yml` passes.
+1. Open a PR with release notes/changelog updates and verify `package-check.yml` passes.
 2. Create and push annotated tag `vX.Y.Z`.
 3. Verify `publish-pypi.yml` succeeds.
 4. Install from PyPI in a fresh virtual environment and run command smoke tests.

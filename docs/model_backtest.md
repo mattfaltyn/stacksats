@@ -4,7 +4,7 @@ This document explains the backtesting framework in `stacksats/backtest.py` and 
 
 ## Overview
 
-The backtest system validates the dynamic DCA strategy by comparing its performance against uniform DCA (equal daily allocations) across rolling windows with exactly 365 or 366 allocation days from 2018-01-01 to the present.
+The backtest system validates the dynamic DCA strategy by comparing its performance against uniform DCA (equal daily allocations) across rolling windows using the configured fixed allocation span (default: 365 days) from 2018-01-01 to the present.
 
 Allocation invariants and user/framework boundaries are defined in `docs/framework.md`.
 Backtesting uses the same sealed allocation kernel as production.
@@ -29,7 +29,7 @@ flowchart TD
     end
     
     subgraph backtest [Backtest Engine]
-        WINDOWS[Rolling 365_366 Day Windows<br/>Daily start dates]
+        WINDOWS[Rolling Fixed-Span Windows<br/>Daily start dates]
         WEIGHTS[compute_window_weights]
         SPD[Sats-per-Dollar<br/>Calculation]
         VALIDATE[Weight Validation<br/>∑w = 1.0]
@@ -90,7 +90,7 @@ Features include:
 
 ### Rolling Window Backtest
 
-For each daily start date from 2018-01-01, creates an inclusive 365/366-day investment window:
+For each daily start date from 2018-01-01, creates an inclusive fixed-span investment window (default: 365 days):
 
 ```python
 # Window: 2018-01-01 → 2018-12-31
@@ -158,7 +158,7 @@ Summary: 908/2554 underperformed (64.45% win rate)
 
 | Metric | Value | Requirement |
 |--------|-------|-------------|
-| Windows tested | 2,554 | All rolling 365/366-day windows |
+| Windows tested | 2,554 | All rolling fixed-span windows in the selected range |
 | Losses | 908 | Windows where dynamic < uniform |
 | Win rate | 64.45% | ≥ 50% required |
 | Status | ✅ Passed | Strategy ready for submission |
@@ -241,9 +241,9 @@ for probe in sample_dates:
 ## Framework Contract Enforcement
 
 - Backtest uses the same sealed allocation kernel as export/local in `stacksats/model_development.py`.
-- Window generation enforces 365/366 allocation-day spans in `stacksats/prelude.py`.
+- Window generation enforces the configured fixed allocation span in `stacksats/prelude.py`.
 - Contract-level guards (finite/range/immutability/final invariants) are centralized in `stacksats/framework_contract.py`.
-- Backtest parity and lock semantics are tested in `tests/test_backtest_export_parity.py` and `tests/test_weight_stability.py`.
+- Backtest parity and lock semantics are tested in `tests/integration/backtest/test_backtest_export_parity.py` and `tests/unit/model/test_weight_stability.py`.
 
 ### Win Rate Requirement
 

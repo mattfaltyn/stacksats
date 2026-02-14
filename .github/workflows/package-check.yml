@@ -44,6 +44,9 @@ jobs:
       - name: Run lint
         run: ruff check .
 
+      - name: Check docs references
+        run: bash scripts/check_docs_refs.sh
+
       - name: Run tests
         run: pytest tests/ -v -m "not performance"
 

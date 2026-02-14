@@ -9,21 +9,21 @@ Framework invariants are defined in `docs/framework.md`. Validation should confi
 - per-day feasibility projection is respected,
 - remaining-budget enforcement holds,
 - past weights remain locked/immutable.
-- allocation windows are exactly 365 or 366 days (never 367).
+- allocation windows match the configured fixed span (default: 365 days).
 
 ## Framework Contract Enforcement
 
 Primary implementation points:
 - `stacksats/framework_contract.py` (span checks, clipping, lock-prefix validation, final invariants)
 - `stacksats/model_development.py` (sealed allocation kernel paths)
-- `stacksats/prelude.py` (365/366 allocation-day window generation)
+- `stacksats/prelude.py` (fixed-span allocation-day window generation)
 - `stacksats/export_weights.py` + `stacksats/modal_app.py` (production lock loading through yesterday)
 
 Primary enforcement tests:
-- `tests/test_framework_invariants.py`
-- `tests/test_weight_stability.py`
-- `tests/test_backtest_export_parity.py`
-- `tests/test_bdd_date_ranges.py`
+- `tests/unit/core/test_framework_invariants.py`
+- `tests/unit/model/test_weight_stability.py`
+- `tests/integration/backtest/test_backtest_export_parity.py`
+- `tests/bdd/scenarios/test_bdd_date_ranges.py`
 
 ## Inputs You Need
 
@@ -76,9 +76,9 @@ Fail criteria:
 Run the targeted leakage and stability suites:
 
 ```bash
-pytest tests/test_bdd_forward_looking.py -v
-pytest tests/test_weight_stability.py -v
-pytest tests/test_api_enhancements.py -k "forward_leakage or leaky" -v
+pytest tests/bdd/scenarios/test_bdd_forward_looking.py -v
+pytest tests/unit/model/test_weight_stability.py -v
+pytest tests/unit/core/test_api_enhancements.py -k "forward_leakage or leaky" -v
 ```
 
 What these cover:
@@ -97,8 +97,8 @@ Pass criteria:
 Run walk-forward and out-of-sample consistency checks:
 
 ```bash
-pytest tests/test_cross_validation.py -v
-pytest tests/test_statistical_validation.py -v
+pytest tests/integration/backtest/test_cross_validation.py -v
+pytest tests/integration/backtest/test_statistical_validation.py -v
 ```
 
 What these cover:
@@ -122,9 +122,9 @@ ruff check .
 Framework contract gate (mirrors CI/local enforcement):
 
 ```bash
-pytest -q tests/test_runner.py
-pytest -q tests/test_weight_stability.py
-pytest -q tests/test_bdd_database_operations.py
+pytest -q tests/unit/core/test_runner.py
+pytest -q tests/unit/model/test_weight_stability.py
+pytest -q tests/bdd/scenarios/test_bdd_database_operations.py
 pytest -q
 ruff check .
 ```

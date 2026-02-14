@@ -25,6 +25,7 @@ Run these before opening a pull request:
 
 ```bash
 ruff check .
+bash scripts/check_docs_refs.sh
 pytest tests/ -v
 python -m build
 python -m twine check dist/*
@@ -57,4 +58,3 @@ If your change affects users, APIs, CLI behavior, packaging, or docs surfaced on
 ## Questions
 
 Open a GitHub issue for questions, bugs, or feature requests.
-

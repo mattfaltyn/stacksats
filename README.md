@@ -5,7 +5,7 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats, developed by [Hypertrial](https://www.hypertrail.ai), is a Python package for strategy-first Bitcoin DCA ("stacking sats") research and execution.
+StackSats, developed by [Hypertrial](https://www.hypertrial.ai), is a Python package for strategy-first Bitcoin DCA ("stacking sats") research and execution.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
@@ -17,6 +17,7 @@ Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 - The same sealed allocation kernel runs in local, backtest, and production.
 
 See `docs/framework.md` for the canonical contract.
+For a docs index, start at `docs/README.md`.
 
 ## Installation
 
@@ -124,6 +125,7 @@ Top-level exports:
 ```bash
 pytest tests/ -v
 ruff check .
+bash scripts/check_docs_refs.sh
 ```
 
 For command examples using the packaged strategy template, see `docs/commands.md`.
