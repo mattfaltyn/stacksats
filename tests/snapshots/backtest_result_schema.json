@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "required": ["provenance", "summary_metrics", "window_level_data"],
+  "properties": {
+    "provenance": {
+      "type": "object",
+      "required": ["strategy_id", "version", "config_hash", "run_id"],
+      "properties": {
+        "strategy_id": { "type": "string" },
+        "version": { "type": "string" },
+        "config_hash": { "type": "string" },
+        "run_id": { "type": "string" }
+      }
+    },
+    "summary_metrics": {
+      "type": "object",
+      "required": ["score", "win_rate", "exp_decay_percentile", "windows"],
+      "properties": {
+        "score": { "type": "number" },
+        "win_rate": { "type": "number" },
+        "exp_decay_percentile": { "type": "number" },
+        "windows": { "type": "integer" }
+      }
+    },
+    "window_level_data": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

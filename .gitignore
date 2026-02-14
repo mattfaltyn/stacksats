@@ -224,6 +224,7 @@ __marimo__/
 
 *.csv
 *.json
+!tests/snapshots/*.json
 *.yaml
 *.yml
 !.github/
