@@ -122,8 +122,26 @@ class BTCDataProvider:
             yesterday = today - pd.Timedelta(days=1)
             if yesterday in df.index and pd.notna(df.loc[yesterday, mvrv_col]):
                 df.loc[today, mvrv_col] = df.loc[yesterday, mvrv_col]
+                logging.info(
+                    "Used yesterday's MVRV value (%s) for %s",
+                    f"{df.loc[yesterday, mvrv_col]:.4f}",
+                    today.date(),
+                )
+            else:
+                logging.warning(
+                    "Could not find valid MVRV for %s. Yesterday (%s) not available "
+                    "or also missing MVRV.",
+                    today.date(),
+                    yesterday.date(),
+                )
 
         remaining_missing = df.loc[backtest_start_ts:today, price_col].isnull()
         if remaining_missing.any():
-            raise ValueError("Critical error: BTC-USD prices missing in required date range.")
+            num_missing = int(remaining_missing.sum())
+            first_missing = df.loc[backtest_start_ts:today][remaining_missing].index.min().date()
+            raise AssertionError(
+                "Critical error: "
+                f"{num_missing} dates still missing BTC-USD prices. "
+                f"First missing: {first_missing}"
+            )
         return df

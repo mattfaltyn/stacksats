@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stacksats"
 dynamic = ["version"]
-description = "Bitcoin DCA model development, backtesting, and Modal deployment toolkit"
+description = "Bitcoin DCA model development and backtesting toolkit"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -43,11 +43,8 @@ Security = "https://github.com/hypertrial/stacksats/security/policy"
 
 [project.optional-dependencies]
 deploy = [
-  "modal>=0.52.0",
   "psycopg2-binary>=2.9.0",
-  "fastapi>=0.104.0",
   "python-dotenv>=1.0.0",
-  "pyarrow>=13.0.0",
 ]
 dev = [
   "pytest>=7.0.0",

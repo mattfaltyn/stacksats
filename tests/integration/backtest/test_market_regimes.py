@@ -22,7 +22,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_modal
+from stacksats.backtest import compute_weights_shared
 from stacksats.model_development import compute_weights_fast, precompute_features
 from stacksats.prelude import compute_cycle_spd
 
@@ -328,7 +328,7 @@ class TestBullMarketPerformance:
         backtest._FEATURES_DF = bull_market_features
 
         spd_table = compute_cycle_spd(
-            bull_market_df, compute_weights_modal, features_df=bull_market_features
+            bull_market_df, compute_weights_shared, features_df=bull_market_features
         )
 
         assert len(spd_table) > 0, "Should produce SPD results"
@@ -346,7 +346,7 @@ class TestBullMarketPerformance:
         backtest._FEATURES_DF = bull_market_features
 
         spd_table = compute_cycle_spd(
-            bull_market_df, compute_weights_modal, features_df=bull_market_features
+            bull_market_df, compute_weights_shared, features_df=bull_market_features
         )
 
         # Filter out NaN rows (edge cases)
@@ -388,7 +388,7 @@ class TestBearMarketPerformance:
         backtest._FEATURES_DF = bear_market_features
 
         spd_table = compute_cycle_spd(
-            bear_market_df, compute_weights_modal, features_df=bear_market_features
+            bear_market_df, compute_weights_shared, features_df=bear_market_features
         )
 
         assert len(spd_table) > 0, "Should produce SPD results"
@@ -402,7 +402,7 @@ class TestBearMarketPerformance:
         backtest._FEATURES_DF = bear_market_features
 
         spd_table = compute_cycle_spd(
-            bear_market_df, compute_weights_modal, features_df=bear_market_features
+            bear_market_df, compute_weights_shared, features_df=bear_market_features
         )
 
         # Filter out NaN rows
@@ -444,7 +444,7 @@ class TestSidewaysMarketPerformance:
 
         spd_table = compute_cycle_spd(
             sideways_market_df,
-            compute_weights_modal,
+            compute_weights_shared,
             features_df=sideways_market_features,
         )
 
@@ -458,7 +458,7 @@ class TestSidewaysMarketPerformance:
 
         spd_table = compute_cycle_spd(
             sideways_market_df,
-            compute_weights_modal,
+            compute_weights_shared,
             features_df=sideways_market_features,
         )
 
@@ -503,7 +503,7 @@ class TestHighVolatilityPerformance:
 
         spd_table = compute_cycle_spd(
             high_volatility_df,
-            compute_weights_modal,
+            compute_weights_shared,
             features_df=high_volatility_features,
         )
 
@@ -551,7 +551,7 @@ class TestCrashRecoveryPerformance:
 
         spd_table = compute_cycle_spd(
             crash_recovery_df,
-            compute_weights_modal,
+            compute_weights_shared,
             features_df=crash_recovery_features,
         )
 
@@ -568,7 +568,7 @@ class TestCrashRecoveryPerformance:
 
         spd_table = compute_cycle_spd(
             crash_recovery_df,
-            compute_weights_modal,
+            compute_weights_shared,
             features_df=crash_recovery_features,
         )
 
@@ -683,7 +683,7 @@ class TestCrossRegimeComparison:
             backtest._FEATURES_DF = features
 
             spd_table = compute_cycle_spd(
-                df, compute_weights_modal, features_df=features
+                df, compute_weights_shared, features_df=features
             )
             valid_rows = spd_table["excess_percentile"].dropna()
 

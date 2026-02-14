@@ -10,7 +10,7 @@ import inspect
 import sys
 from pathlib import Path
 
-from .strategy_types import BaseStrategy
+from .strategy_types import BaseStrategy, validate_strategy_contract
 
 
 def _load_module(module_or_path: str):
@@ -77,21 +77,7 @@ def load_strategy(
         raise TypeError(
             f"Strategy '{class_name}' must subclass {base_name}."
         )
-    if "compute_weights" in strategy_cls.__dict__:
-        raise TypeError(
-            "Custom compute_weights overrides are not allowed. "
-            "Implement propose_weight(state) or "
-            "build_target_profile(ctx, features_df, signals) instead."
-        )
-    has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
-    has_profile_hook = (
-        strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
-    )
-    if not (has_propose_hook or has_profile_hook):
-        raise TypeError(
-            "Strategy must implement propose_weight(state) or "
-            "build_target_profile(ctx, features_df, signals)."
-        )
+    has_propose_hook, has_profile_hook = validate_strategy_contract(strategy)
     if has_propose_hook:
         propose_weight = getattr(strategy, "propose_weight", None)
         if not callable(propose_weight):

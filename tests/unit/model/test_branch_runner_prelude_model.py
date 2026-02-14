@@ -6,7 +6,6 @@ import pytest
 
 from stacksats.model_development import (
     allocate_from_proposals,
-    compute_mean_reversion_pressure,
     compute_preference_scores,
     compute_weights_from_proposals,
     compute_weights_from_target_profile,
@@ -160,16 +159,6 @@ def test_compute_cycle_spd_raises_when_weight_validation_fails(
             end_date="2025-01-01",
             validate_weights=True,
         )
-
-
-def test_compute_mean_reversion_pressure_adds_extreme_term() -> None:
-    zscores = np.array([-3.0, -1.0, 0.0, 1.0, 3.0], dtype=float)
-    pressure = compute_mean_reversion_pressure(zscores)
-    baseline = np.tanh(zscores * 0.5)
-
-    assert pressure[0] < baseline[0]
-    assert pressure[-1] > baseline[-1]
-    assert np.all(np.abs(pressure) <= 1.0 + 1e-12)
 
 
 def test_allocate_from_proposals_returns_empty_when_total_is_zero() -> None:

@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_modal
+from stacksats.backtest import compute_weights_shared
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import compute_weights_fast, precompute_features
 from stacksats.prelude import compute_cycle_spd
@@ -118,8 +118,8 @@ class TestWeightComputationPerformance:
             f"100 window computations took {elapsed:.2f}s, threshold: 5.0s"
         )
 
-    def test_compute_weights_modal_performance(self, sample_features_df):
-        """Benchmark: compute_weights_modal should be < 100ms per window."""
+    def test_compute_weights_shared_performance(self, sample_features_df):
+        """Benchmark: compute_weights_shared should be < 100ms per window."""
         backtest._FEATURES_DF = sample_features_df
 
         start_date = pd.Timestamp("2024-01-01")
@@ -133,15 +133,15 @@ class TestWeightComputationPerformance:
         window_feat = sample_features_df.loc[start_date:end_date]
 
         # Warm-up
-        compute_weights_modal(window_feat)
+        compute_weights_shared(window_feat)
 
         # Timed run
         start = time.time()
-        compute_weights_modal(window_feat)
+        compute_weights_shared(window_feat)
         elapsed = time.time() - start
 
         assert elapsed < 0.1, (
-            f"compute_weights_modal took {elapsed * 1000:.1f}ms, threshold: 100ms"
+            f"compute_weights_shared took {elapsed * 1000:.1f}ms, threshold: 100ms"
         )
 
 
@@ -166,7 +166,7 @@ class TestFullBacktestPerformance:
 
         start = time.time()
         spd_table = compute_cycle_spd(
-            sample_btc_df, compute_weights_modal, features_df=sample_features_df
+            sample_btc_df, compute_weights_shared, features_df=sample_features_df
         )
         elapsed = time.time() - start
 

@@ -36,7 +36,7 @@ class ExampleMVRVStrategy(BaseStrategy):
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         # Runner already passes precomputed model features in ctx.features_df.
-        # Recomputing here drops raw MVRV inputs and degrades parity with Modal.
+        # Recomputing here drops raw MVRV inputs and degrades parity with runtime export.
         return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
 
     def build_signals(

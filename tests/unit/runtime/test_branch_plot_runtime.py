@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-import stacksats.modal_app as modal_app
 from stacksats.plot_mvrv import main as plot_mvrv_main
 from stacksats.plot_weights import main as plot_weights_main, plot_dca_weights
 
@@ -97,21 +96,3 @@ def test_plot_weights_main_uses_oldest_range_when_no_args(
     assert captured["start_date"] == "2024-01-01"
     assert captured["end_date"] == "2024-12-31"
     assert conn.close.called
-
-
-def test_modal_local_entrypoint_prints_export_summary(monkeypatch, capsys) -> None:
-    final_df = pd.DataFrame({"id": [1, 2], "weight": [0.4, 0.6]})
-    metadata = {
-        "rows": 2,
-        "date_ranges": 1,
-        "range_start": "2024-01-01",
-        "range_end": "2024-12-31",
-        "export_date": "2024-01-15",
-    }
-    monkeypatch.setattr(modal_app.run_export, "remote", lambda: (final_df, metadata))
-
-    modal_app.main()
-
-    output = capsys.readouterr().out
-    assert "Running export via Modal..." in output
-    assert "Successfully exported 2 rows" in output

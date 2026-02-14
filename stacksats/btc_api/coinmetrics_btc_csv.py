@@ -90,31 +90,6 @@ def fetch_coinmetrics_btc_csv(
     return df
 
 
-def get_coinmetrics_btc_csv_raw(url: Optional[str] = None) -> bytes:
-    """Fetch raw CoinMetrics BTC CSV data as bytes.
-
-    Args:
-        url: Optional custom URL for the CSV. Defaults to CoinMetrics public repo.
-
-    Returns:
-        Raw CSV content as bytes.
-
-    Raises:
-        requests.RequestException: If the HTTP request fails.
-    """
-    csv_url = url or COINMETRICS_BTC_CSV_URL
-
-    logging.info(f"Fetching raw CoinMetrics BTC CSV from {csv_url}...")
-
-    try:
-        response = requests.get(csv_url, timeout=30)
-        response.raise_for_status()
-        return response.content
-    except requests.RequestException as e:
-        logging.error(f"Failed to fetch CoinMetrics CSV: {e}")
-        raise
-
-
 if __name__ == "__main__":
     # Example usage: fetch and display basic info
     df = fetch_coinmetrics_btc_csv()

@@ -228,5 +228,5 @@ def test_load_raises_when_required_prices_remain_missing(mocker) -> None:
     mocker.patch("stacksats.data_btc.fetch_btc_price_robust", return_value=None)
 
     provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    with pytest.raises(ValueError, match="prices missing in required date range"):
+    with pytest.raises(AssertionError, match="Critical error: .*missing BTC-USD prices"):
         provider.load(backtest_start="2024-01-01")

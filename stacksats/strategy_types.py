@@ -193,11 +193,7 @@ class BaseStrategy(ABC):
                 series, name=f"signal '{key}'", expected_index=expected_index
             )
 
-        strategy_cls = self.__class__
-        has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
-        has_profile_hook = (
-            strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
-        )
+        has_propose_hook, has_profile_hook = strategy_hook_status(self.__class__)
         if not (has_propose_hook or has_profile_hook):
             raise TypeError(
                 "Strategy must implement propose_weight(state) or "
@@ -313,3 +309,29 @@ class BaseStrategy(ABC):
 
         runner = StrategyRunner()
         return runner.export(self, config or self.default_export_config(), **kwargs)
+
+
+def strategy_hook_status(strategy_cls: type[BaseStrategy]) -> tuple[bool, bool]:
+    """Return whether strategy overrides propose/profile intent hooks."""
+    has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
+    has_profile_hook = (
+        strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
+    )
+    return has_propose_hook, has_profile_hook
+
+
+def validate_strategy_contract(strategy: BaseStrategy) -> tuple[bool, bool]:
+    """Enforce framework-owned compute kernel boundaries for strategies."""
+    if strategy.__class__.compute_weights is not BaseStrategy.compute_weights:
+        raise TypeError(
+            "Custom compute_weights overrides are not allowed. "
+            "Implement propose_weight(state) or "
+            "build_target_profile(ctx, features_df, signals) instead."
+        )
+    has_propose_hook, has_profile_hook = strategy_hook_status(strategy.__class__)
+    if not (has_propose_hook or has_profile_hook):
+        raise TypeError(
+            "Strategy must implement propose_weight(state) or "
+            "build_target_profile(ctx, features_df, signals)."
+        )
+    return has_propose_hook, has_profile_hook

@@ -8,7 +8,6 @@ import responses
 
 from stacksats.btc_api.coinmetrics_btc_csv import (
     fetch_coinmetrics_btc_csv,
-    get_coinmetrics_btc_csv_raw,
     COINMETRICS_BTC_CSV_URL,
 )
 
@@ -121,35 +120,3 @@ class TestFetchCoinMetricsBTCCSV:
 
         assert len(df) == 1
         assert df.iloc[0]["PriceUSD"] == 50500.0
-
-
-class TestGetCoinMetricsBTCCSVRaw:
-    """Tests for get_coinmetrics_btc_csv_raw function."""
-
-    @responses.activate
-    def test_get_raw_success(self):
-        """Test successful raw byte fetch."""
-        raw_data = b"some raw csv bytes"
-        responses.add(
-            responses.GET,
-            COINMETRICS_BTC_CSV_URL,
-            body=raw_data,
-            status=200,
-        )
-
-        result = get_coinmetrics_btc_csv_raw()
-
-        assert result == raw_data
-        assert isinstance(result, bytes)
-
-    @responses.activate
-    def test_get_raw_http_error(self):
-        """Test that HTTP errors are raised in raw fetch."""
-        responses.add(
-            responses.GET,
-            COINMETRICS_BTC_CSV_URL,
-            status=500,
-        )
-
-        with pytest.raises(requests.RequestException):
-            get_coinmetrics_btc_csv_raw()

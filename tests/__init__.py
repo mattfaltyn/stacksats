@@ -1,2 +1,2 @@
-# Bitcoin Modal Test Suite
+# Bitcoin Test Suite
 

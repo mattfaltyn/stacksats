@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -123,22 +122,6 @@ def main() -> int:
             passed += 1
         else:
             failed += 1
-
-    if shutil.which("modal", path=env["PATH"]):
-        modal_env = env.copy()
-        modal_env["STACKSATS_STRATEGY"] = EXAMPLE_SPEC
-        if run_step(
-            "Modal deploy",
-            ["modal", "deploy", "stacksats/modal_app.py"],
-            cwd=root_dir,
-            env=modal_env,
-        ):
-            passed += 1
-        else:
-            failed += 1
-    else:
-        skip_step("Modal deploy", "modal CLI is not installed")
-        skipped += 1
 
     skip_step("Run tests", "pytest disabled for this script")
     skipped += 1

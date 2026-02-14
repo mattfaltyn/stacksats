@@ -27,6 +27,7 @@ from .strategy_types import (
     StrategyContext,
     TargetProfile,
     ValidationConfig,
+    validate_strategy_contract,
 )
 
 
@@ -46,22 +47,7 @@ class StrategyRunner:
         return self._data_provider.load(backtest_start=BACKTEST_START)
 
     def _validate_strategy_contract(self, strategy: BaseStrategy) -> None:
-        if strategy.__class__.compute_weights is not BaseStrategy.compute_weights:
-            raise TypeError(
-                "Custom compute_weights overrides are not supported. "
-                "Use transform_features/build_signals with propose_weight "
-                "or build_target_profile hooks."
-            )
-        strategy_cls = strategy.__class__
-        has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
-        has_profile_hook = (
-            strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
-        )
-        if not (has_propose_hook or has_profile_hook):
-            raise TypeError(
-                "Strategy must implement propose_weight(state) or "
-                "build_target_profile(ctx, features_df, signals)."
-            )
+        validate_strategy_contract(strategy)
 
     def _validate_weights(
         self,

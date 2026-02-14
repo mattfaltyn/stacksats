@@ -1,4 +1,4 @@
-"""Simulation tests for export_weights.py and modal_app.py.
+"""Simulation tests for export_weights.py.
 
 Tests the full pipeline by simulating time progression day-by-day with
 synthetic BTC prices to ensure weights are computed correctly and database

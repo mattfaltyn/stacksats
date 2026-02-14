@@ -22,7 +22,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_modal
+from stacksats.backtest import compute_weights_shared
 from stacksats.model_development import (
     DYNAMIC_STRENGTH,
     FEATS,
@@ -62,7 +62,7 @@ class TestRandomizedBaseline:
             try:
                 # Run backtest with shuffled prices
                 spd_table = compute_cycle_spd(
-                    shuffled_df, compute_weights_modal, features_df=sample_features_df
+                    shuffled_df, compute_weights_shared, features_df=sample_features_df
                 )
 
                 # Get mean excess percentile (filter out NaN from edge cases)
@@ -102,7 +102,7 @@ class TestRandomizedBaseline:
 
         try:
             spd_table = compute_cycle_spd(
-                reversed_df, compute_weights_modal, features_df=sample_features_df
+                reversed_df, compute_weights_shared, features_df=sample_features_df
             )
 
             # Just verify it runs - performance may differ
@@ -124,7 +124,7 @@ class TestRandomizedBaseline:
 
         try:
             spd_table = compute_cycle_spd(
-                constant_df, compute_weights_modal, features_df=sample_features_df
+                constant_df, compute_weights_shared, features_df=sample_features_df
             )
 
             # With constant prices, span = 0, so percentiles should be NaN
@@ -208,7 +208,7 @@ class TestOverfittingDetection:
         backtest._FEATURES_DF = sample_features_df
 
         spd_table = compute_cycle_spd(
-            sample_btc_df, compute_weights_modal, features_df=sample_features_df
+            sample_btc_df, compute_weights_shared, features_df=sample_features_df
         )
 
         if len(spd_table) < 5:
@@ -322,12 +322,12 @@ class TestOutOfSample:
         try:
             backtest._FEATURES_DF = first_half_features
             spd_first = compute_cycle_spd(
-                first_half, compute_weights_modal, features_df=first_half_features
+                first_half, compute_weights_shared, features_df=first_half_features
             )
 
             backtest._FEATURES_DF = second_half_features
             spd_second = compute_cycle_spd(
-                second_half, compute_weights_modal, features_df=second_half_features
+                second_half, compute_weights_shared, features_df=second_half_features
             )
 
             # Compare mean excess percentiles

@@ -14,19 +14,19 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_modal
+from stacksats.backtest import compute_weights_shared
 from stacksats.model_development import precompute_features
 
 # -----------------------------------------------------------------------------
-# compute_weights_modal Error Tests
+# compute_weights_shared Error Tests
 # -----------------------------------------------------------------------------
 
 
-class TestComputeWeightsModalErrors:
-    """Tests for error conditions in compute_weights_modal."""
+class TestComputeWeightsSharedErrors:
+    """Tests for error conditions in compute_weights_shared."""
 
     def test_features_not_precomputed_raises_error(self):
-        """Test that compute_weights_modal raises error when _FEATURES_DF is None."""
+        """Test that compute_weights_shared raises error when _FEATURES_DF is None."""
         # Save original state
         original_features = backtest._FEATURES_DF
 
@@ -41,7 +41,7 @@ class TestComputeWeightsModalErrors:
             )
 
             with pytest.raises(ValueError, match="Features not precomputed"):
-                compute_weights_modal(dummy_df)
+                compute_weights_shared(dummy_df)
 
         finally:
             # Restore original state
@@ -54,7 +54,7 @@ class TestComputeWeightsModalErrors:
         # Create empty DataFrame
         empty_df = pd.DataFrame(index=pd.DatetimeIndex([]))
 
-        result = compute_weights_modal(empty_df)
+        result = compute_weights_shared(empty_df)
 
         assert len(result) == 0
         assert isinstance(result, pd.Series)
@@ -170,7 +170,7 @@ class TestBoundaryConditions:
 
         if len(window_feat) > 0:
             with pytest.raises(ValueError, match="configured fixed span"):
-                compute_weights_modal(window_feat)
+                compute_weights_shared(window_feat)
 
     def test_date_range_at_data_boundaries(self, sample_btc_df, sample_features_df):
         """Boundary windows must still respect the configured fixed span contract."""
@@ -181,7 +181,7 @@ class TestBoundaryConditions:
         window_feat = sample_features_df.loc[first_date : first_date + pd.Timedelta(days=364)]
 
         if len(window_feat) > 0:
-            result = compute_weights_modal(window_feat)
+            result = compute_weights_shared(window_feat)
             assert len(result) > 0
 
     def test_non_daily_frequency_handling(self):

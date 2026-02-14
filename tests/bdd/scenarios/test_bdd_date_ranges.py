@@ -1,19 +1,9 @@
-"""BDD tests for date range generation.
-
-This module wires the date_ranges.feature to step definitions.
-"""
+"""BDD tests for date range generation."""
 
 import pandas as pd
-from pytest_bdd import scenarios
 
-# Import step definitions to make them available
-from tests.bdd.step_defs.common_steps import *  # noqa: F401, F403
-from tests.bdd.step_defs.database_steps import *  # noqa: F401, F403
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.prelude import generate_date_ranges
-
-# Load all scenarios from the feature file
-scenarios("date_ranges.feature")
 
 
 def test_bdd_ranges_span_cardinality_matches_config() -> None:

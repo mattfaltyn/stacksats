@@ -1,6 +1,6 @@
 # Commands for `examples/model_example.py`
 
-This file explains how to run checks, backtests, exports, and deployment using the standalone strategy file:
+This file explains how to run checks, backtests, and exports using the standalone strategy file:
 
 - `examples/model_example.py`
 - strategy class: `ExampleMVRVStrategy`
@@ -23,7 +23,7 @@ Optional dependencies:
 # For local development tools
 pip install -r requirements-dev.txt
 
-# For export + Modal deployment
+# For export and database tooling
 pip install -e ".[deploy]"
 ```
 
@@ -130,16 +130,7 @@ This includes:
 Notes:
 - `stacksats strategy export` is strategy artifact export (filesystem output).
 
-## 5) Deploy to Modal
-
-Use `STACKSATS_STRATEGY` to tell Modal which strategy class to load:
-
-```bash
-export STACKSATS_STRATEGY="examples/model_example.py:ExampleMVRVStrategy"
-modal deploy stacksats/modal_app.py
-```
-
-## 6) Useful Development Commands
+## 5) Useful Development Commands
 
 Verify this document's example commands end-to-end:
 
@@ -170,6 +161,3 @@ ruff check .
 
 - **`Strategy file not found`**  
   Run from repo root or pass an absolute file path.
-
-- **Modal deploy cannot import custom code**  
-  Keep strategy self-contained in one file, or package your custom modules and use module-path strategy specs.

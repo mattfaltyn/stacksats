@@ -1,13 +1,13 @@
 """Export daily model weights and BTC prices for multiple date ranges.
 
 Generates weights for every day from RANGE_START to RANGE_END.
-Core business logic that can run locally or be imported by Modal functions.
+Core business logic that can run locally or be imported by runtime functions.
 
 Weight computation strategy:
 - Past dates (up to current_date): Use ML model weights
 - Future dates (after current_date): Uniform weights for remaining budget
 - Total always sums to 1.0 without normalization
-- Each day the modal app runs, future uniform weights are recalculated
+- Each day the export process runs, future uniform weights are recalculated
 """
 
 import os
@@ -24,8 +24,8 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
 from .btc_price_fetcher import fetch_btc_price_robust
 from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
-from .prelude import generate_date_ranges, group_ranges_by_start_date
-from .strategy_types import BaseStrategy, StrategyContext
+from .prelude import generate_date_ranges, group_ranges_by_start_date  # noqa: F401
+from .strategy_types import BaseStrategy, StrategyContext, validate_strategy_contract
 
 # Load environment variables from .env file
 try:
@@ -50,26 +50,6 @@ def _require_deploy_dependency(name: str, imported_obj):
         raise ImportError(
             f"Missing optional dependency '{name}'. "
             "Install deploy extras with: pip install stacksats[deploy]"
-        )
-
-
-def _validate_strategy_contract(strategy: BaseStrategy) -> None:
-    """Enforce framework-owned compute kernel boundaries for strategies."""
-    if strategy.__class__.compute_weights is not BaseStrategy.compute_weights:
-        raise TypeError(
-            "Custom compute_weights overrides are not allowed. "
-            "Implement propose_weight(state) or "
-            "build_target_profile(ctx, features_df, signals) instead."
-        )
-    strategy_cls = strategy.__class__
-    has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
-    has_profile_hook = (
-        strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
-    )
-    if not (has_propose_hook or has_profile_hook):
-        raise TypeError(
-            "Strategy must implement propose_weight(state) or "
-            "build_target_profile(ctx, features_df, signals)."
         )
 
 
@@ -103,7 +83,7 @@ def process_start_date_batch(
     if strategy is not None:
         if not isinstance(strategy, BaseStrategy):
             raise TypeError("strategy must subclass BaseStrategy.")
-        _validate_strategy_contract(strategy)
+        validate_strategy_contract(strategy)
 
     results = []
 
@@ -713,5 +693,3 @@ def update_today_weights(conn, df, today_str):
     )
     logging.info(f"Average update rate: {total_updated / commit_time:.1f} rows/second")
     return total_updated
-
-

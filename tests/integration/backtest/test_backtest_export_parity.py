@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stacksats.backtest import compute_weights_modal
+from stacksats.backtest import compute_weights_shared
 from stacksats.export_weights import process_start_date_batch
 from stacksats.model_development import compute_window_weights, precompute_features
 
@@ -630,16 +630,16 @@ class TestEdgeCasesParity:
         assert len(set(future_weights.round(15))) == 1, "Future weights not uniform"
 
 
-class TestComputeWeightsModalParity:
-    """Test that compute_weights_modal matches expected behavior."""
+class TestComputeWeightsSharedParity:
+    """Test that compute_weights_shared matches expected behavior."""
 
-    def test_compute_weights_modal_uses_end_as_current(
+    def test_compute_weights_shared_uses_end_as_current(
         self, parity_features_df, parity_btc_df
     ):
-        """Test that compute_weights_modal uses end_date as current_date.
+        """Test that compute_weights_shared uses end_date as current_date.
 
         For backtesting historical data, all dates are in the "past",
-        so compute_weights_modal should use end_date as current_date.
+        so compute_weights_shared should use end_date as current_date.
         """
         import stacksats.backtest as backtest
 
@@ -651,8 +651,8 @@ class TestComputeWeightsModalParity:
         # Create a window DataFrame
         window_df = parity_features_df.loc[start_date:end_date]
 
-        # Compute using compute_weights_modal
-        modal_weights = compute_weights_modal(window_df)
+        # Compute using compute_weights_shared
+        shared_weights = compute_weights_shared(window_df)
 
         # Compute using compute_window_weights with current_date = end_date
         expected_weights = compute_window_weights(
@@ -661,15 +661,15 @@ class TestComputeWeightsModalParity:
 
         # Should be identical
         np.testing.assert_allclose(
-            modal_weights.values,
+            shared_weights.values,
             expected_weights.values,
             rtol=FLOAT_TOLERANCE,
         )
 
-    def test_compute_weights_modal_matches_export_all_past(
+    def test_compute_weights_shared_matches_export_all_past(
         self, parity_features_df, parity_btc_df
     ):
-        """Test compute_weights_modal matches export_weights for historical window."""
+        """Test compute_weights_shared matches export_weights for historical window."""
         import stacksats.backtest as backtest
 
         backtest._FEATURES_DF = parity_features_df
@@ -680,8 +680,8 @@ class TestComputeWeightsModalParity:
         # Create a window DataFrame
         window_df = parity_features_df.loc[start_date:end_date]
 
-        # Compute using compute_weights_modal
-        modal_weights = compute_weights_modal(window_df)
+        # Compute using compute_weights_shared
+        shared_weights = compute_weights_shared(window_df)
 
         # Compute using export_weights with current_date = end_date (all past)
         result = process_start_date_batch(
@@ -697,8 +697,8 @@ class TestComputeWeightsModalParity:
 
         # Should be identical
         np.testing.assert_allclose(
-            modal_weights.values,
+            shared_weights.values,
             export_weights.values,
             rtol=FLOAT_TOLERANCE,
-            err_msg="compute_weights_modal doesn't match export_weights",
+            err_msg="compute_weights_shared doesn't match export_weights",
         )

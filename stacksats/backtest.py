@@ -13,18 +13,11 @@ import seaborn as sns
 from .model_development import compute_window_weights
 from .prelude import parse_window_dates
 
-# Global variable to store precomputed features (Modal-aligned)
+# Global variable to store precomputed features (shared runtime)
 _FEATURES_DF = None
 
 
-def _configure_plot_style() -> None:
-    sns.set_style("whitegrid")
-    sns.set_palette("husl")
-    plt.rcParams["figure.dpi"] = 100
-    plt.rcParams["savefig.dpi"] = 300
-
-
-def compute_weights_modal(df_window: pd.DataFrame) -> pd.Series:
+def compute_weights_shared(df_window: pd.DataFrame) -> pd.Series:
     """Wrapper using compute_window_weights for validation.
 
     Uses precomputed features stored in _FEATURES_DF.

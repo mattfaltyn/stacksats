@@ -378,7 +378,7 @@ def compute_window_weights(
 - Contract helpers live in `stacksats/framework_contract.py`.
 - Allocation kernel paths are in `stacksats/model_development.py` (`allocate_from_proposals`, `allocate_sequential_stable`, `compute_window_weights`).
 - Date-span generation is enforced in `stacksats/prelude.py` (`generate_date_ranges`) using the configured fixed allocation span (default: 365 days).
-- Production lock loading and pass-through are in `stacksats/export_weights.py` and `stacksats/modal_app.py`.
+- Production lock loading and pass-through are in `stacksats/export_weights.py`.
 - Enforcement tests: `tests/unit/core/test_framework_invariants.py`, `tests/unit/model/test_weight_stability.py`, `tests/integration/backtest/test_backtest_export_parity.py`, and `tests/bdd/scenarios/test_bdd_date_ranges.py`.
 
 ## Constants Reference

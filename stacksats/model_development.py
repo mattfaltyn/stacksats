@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 from .framework_contract import (
     ALLOCATION_SPAN_DAYS,
-    MAX_DAILY_WEIGHT,
     MIN_DAILY_WEIGHT,
     apply_clipped_weight,
     assert_final_invariants,
@@ -35,7 +34,6 @@ MVRV_COL = "CapMVRVCur"
 
 # Strategy parameters
 MIN_W = MIN_DAILY_WEIGHT
-MAX_W = MAX_DAILY_WEIGHT
 MA_WINDOW = 200  # 200-day simple moving average
 MVRV_GRADIENT_WINDOW = 30  # Window for MVRV trend detection
 MVRV_ROLLING_WINDOW = 365  # Window for MVRV Z-score normalization
@@ -210,35 +208,6 @@ def compute_signal_confidence(
     confidence = agreement * 0.7 + gradient_alignment * 0.3
 
     return np.clip(confidence, 0, 1)
-
-
-def compute_mean_reversion_pressure(mvrv_zscore: np.ndarray) -> np.ndarray:
-    """Compute mean reversion pressure based on distance from equilibrium.
-
-    MVRV tends to revert to the mean. The further from equilibrium,
-    the stronger the expected reversion pressure.
-
-    Uses a sigmoid-like function to model increasing pressure at extremes.
-
-    Args:
-        mvrv_zscore: MVRV Z-score in [-4, 4]
-
-    Returns:
-        Reversion pressure in [-1, 1] where:
-        - Positive = pressure to decrease (price likely to fall)
-        - Negative = pressure to increase (price likely to rise)
-    """
-    # Sigmoid-like pressure: increases non-linearly at extremes
-    pressure = np.tanh(mvrv_zscore * 0.5)
-
-    # Extra pressure at extremes (beyond ±2 std)
-    extreme_pressure = np.where(
-        np.abs(mvrv_zscore) > 2,
-        np.sign(mvrv_zscore) * 0.3 * (np.abs(mvrv_zscore) - 2),
-        0,
-    )
-
-    return np.clip(pressure + extreme_pressure, -1, 1)
 
 
 # =============================================================================
