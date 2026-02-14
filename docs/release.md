@@ -69,6 +69,11 @@ bash scripts/release_check.sh
 
 This should run lint, tests, build, and `twine check`.
 
+If your environment has constrained SSL trust roots, `scripts/release_check.sh` will:
+- Fall back to already-installed local `build`/`twine` when tool refresh via pip fails.
+- Retry package build with `python -m build --no-isolation` only when isolated-build failure looks SSL-related.
+- Still fail normally for non-SSL build errors.
+
 ### 3) Build artifacts
 
 ```bash
